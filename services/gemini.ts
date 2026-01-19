@@ -3,11 +3,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MealPlan, User } from "../types";
 
 const getAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("ERREUR: La clé API Gemini (API_KEY) est manquante dans les variables d'environnement Vercel.");
+  // En mode Vite, on utilise une approche prudente pour la clé
+  let apiKey = '';
+  try {
+    apiKey = process.env.API_KEY || '';
+  } catch (e) {
+    console.warn("process.env non disponible");
   }
-  return new GoogleGenAI({ apiKey: apiKey || '' });
+  
+  return new GoogleGenAI({ apiKey });
 };
 
 const MEAL_PLAN_SCHEMA = {
