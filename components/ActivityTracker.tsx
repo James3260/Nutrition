@@ -68,7 +68,7 @@ const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser })
   const estimatedCaloriesIn = 1800;
   const energyBalance = bmr + caloriesBurnedToday - estimatedCaloriesIn;
 
-  // Hydration logic - FIXED
+  // Hydration logic
   const todayHydration = useMemo(() => {
     return hydrationRecords
       .filter(r => new Date(r.date).toDateString() === todayStr)
@@ -131,7 +131,8 @@ const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser })
         },
         {
           label: 'IMC',
-          data: sortedWeightHistory.map(r => (r.weight / (heightInMeters * heightInMeters)).toFixed(2)),
+          // FIX: Utilisation de parseFloat pour retourner un number[] et non un string[]
+          data: sortedWeightHistory.map(r => parseFloat((r.weight / (heightInMeters * heightInMeters)).toFixed(2))),
           borderColor: '#6366f1',
           backgroundColor: 'rgba(99, 102, 241, 0.1)',
           yAxisID: 'y1',
@@ -188,13 +189,6 @@ const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser })
   const totalCaloriesWeek = workouts
     .filter(w => new Date(w.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
     .reduce((acc, w) => acc + w.caloriesBurned, 0);
-
-  const bmiProgress = useMemo(() => {
-    if (sortedWeightHistory.length < 2 || !heightInMeters) return null;
-    const firstBmi = sortedWeightHistory[0].weight / (heightInMeters * heightInMeters);
-    const lastBmi = sortedWeightHistory[sortedWeightHistory.length - 1].weight / (heightInMeters * heightInMeters);
-    return (lastBmi - firstBmi).toFixed(2);
-  }, [sortedWeightHistory, heightInMeters]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-500 pb-20">

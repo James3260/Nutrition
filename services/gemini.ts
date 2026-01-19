@@ -3,7 +3,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MealPlan, User } from "../types";
 
 const getAI = () => {
-  // En mode Vite, on utilise une approche prudente pour la clé
   let apiKey = '';
   try {
     apiKey = process.env.API_KEY || '';
@@ -47,7 +46,7 @@ const MEAL_PLAN_SCHEMA = {
                 amount: { type: Type.STRING, description: "EXACT portion in grams tailored to user's body" }
               },
               required: ["item", "amount"]
-            }
+          }
           },
           steps: {
             type: Type.ARRAY,
@@ -97,10 +96,8 @@ export const chatWithAI = async (message: string, user: User): Promise<{ reply: 
     })}
   
   RÈGLES :
-  1. Si des informations manquent (poids, taille, âge, sexe, niveau d'activité), pose UNE SEULE question à la fois pour les obtenir.
-  2. Sois encourageant et professionnel.
-  3. Si l'utilisateur te donne une info, confirme-la et passe à la suivante ou propose de créer le plan si tout est complet.
-  4. Réponds TOUJOURS en JSON selon le schéma fourni.`;
+  1. Si des informations manquent, pose UNE SEULE question à la fois.
+  2. Réponds TOUJOURS en JSON selon le schéma fourni.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -113,7 +110,7 @@ export const chatWithAI = async (message: string, user: User): Promise<{ reply: 
       },
     });
 
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(response.text || '{}');
     return result;
   } catch (error) {
     console.error("Chat error:", error);
@@ -140,7 +137,7 @@ export const generateMealPlan = async (userPrompt: string, user: User): Promise<
       },
     });
 
-    return JSON.parse(response.text);
+    return JSON.parse(response.text || '{}');
   } catch (error) {
     console.error("Erreur MealPlan:", error);
     throw error;

@@ -3,7 +3,6 @@ import { GoogleGenAI } from "@google/genai";
 
 export class IconService {
   static async generateAppIcon(): Promise<string> {
-    // On crée l'instance au dernier moment pour utiliser la clé sélectionnée par l'utilisateur
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const prompt = "A high-end, professional, modern minimalist app icon for 'NutriTrack AI'. The design features a stylized vibrant emerald green leaf intertwined with sleek digital AI circuit lines. Soft shadows, premium 3D render feel, white background, centered, symmetrical, 1024x1024 resolution.";
@@ -26,9 +25,12 @@ export class IconService {
         throw new Error("Le modèle n'a renvoyé aucun résultat.");
       }
 
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
+      const firstCandidate = response.candidates[0];
+      if (firstCandidate.content && firstCandidate.content.parts) {
+        for (const part of firstCandidate.content.parts) {
+          if (part.inlineData) {
+            return `data:image/png;base64,${part.inlineData.data}`;
+          }
         }
       }
 
@@ -40,7 +42,6 @@ export class IconService {
   }
 
   static applyIcon(base64Icon: string) {
-    // Update Favicon
     let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (!favicon) {
       favicon = document.createElement('link');
@@ -49,7 +50,6 @@ export class IconService {
     }
     favicon.href = base64Icon;
 
-    // Update Apple Touch Icon
     let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
     if (!appleIcon) {
       appleIcon = document.createElement('link');
@@ -58,7 +58,6 @@ export class IconService {
     }
     appleIcon.href = base64Icon;
 
-    // Update Manifest dynamically
     const manifestContent = {
       "name": "NutriTrack AI - Assistant Nutrition",
       "short_name": "NutriTrack",
