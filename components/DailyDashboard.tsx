@@ -15,11 +15,12 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
   const planDay = mealPlan ? ((today.getDate() - 1) % 30) + 1 : null;
   const currentDayPlan = mealPlan?.days.find(d => d.day === planDay);
 
-  // Métabolisme de base (avec valeurs de secours si profil admin vide)
   const bmr = useMemo(() => {
-    const weight = user.weightHistory?.[user.weightHistory.length - 1]?.weight || 75;
-    const height = user.height || 175;
-    const age = user.age || 35;
+    const weight = user.weightHistory?.length 
+      ? user.weightHistory[user.weightHistory.length - 1].weight 
+      : (user.gender === 'man' ? 80 : 65);
+    const height = user.height || 170;
+    const age = user.age || 30;
     
     if (user.gender === 'woman') {
       return Math.round(447.593 + (9.247 * weight) + (3.098 * height) - (4.330 * age));
@@ -52,7 +53,6 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
   const hydrationPercentage = Math.min(100, Math.round((hydrationToday / hydrationGoal) * 100));
   const remainingCalories = bmr + caloriesBurned - caloriesEaten;
 
-  // Calcul pour le cercle SVG (viewBox 100x100, radius 45)
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (hydrationPercentage / 100) * circumference;
@@ -86,7 +86,6 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
 
   return (
     <div className="flex-1 overflow-y-auto space-y-6 pb-10 custom-scrollbar">
-      {/* Date Header */}
       <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
         <h1 className="text-3xl font-black text-slate-900 capitalize leading-tight">
           {today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -98,7 +97,6 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Calories Card */}
         <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[280px]">
           <div>
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-6">Énergie Restante</h3>
@@ -121,63 +119,26 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
                <span>-{caloriesEaten}</span>
              </div>
           </div>
-          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
         </div>
 
-        {/* Hydration Card - FIXED SVG AND ALIGNMENT */}
         <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col items-center justify-between min-h-[280px]">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 w-full text-center">Hydratation</h3>
-          
           <div className="relative w-36 h-36 flex items-center justify-center">
              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                {/* Background Circle */}
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r={radius} 
-                  stroke="currentColor" 
-                  strokeWidth="8" 
-                  fill="transparent" 
-                  className="text-blue-50" 
-                />
-                {/* Progress Circle */}
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r={radius} 
-                  stroke="currentColor" 
-                  strokeWidth="8" 
-                  fill="transparent" 
-                  strokeDasharray={circumference} 
-                  strokeDashoffset={offset} 
-                  strokeLinecap="round" 
-                  className="text-blue-500 transition-all duration-1000 ease-out" 
-                />
+                <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-blue-50" />
+                <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="text-blue-500 transition-all duration-1000" />
               </svg>
-              {/* Perfectly centered text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-3xl font-black text-slate-800 leading-none">{hydrationPercentage}%</span>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{hydrationToday}ml</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">{hydrationToday}ml</span>
               </div>
           </div>
-
           <div className="flex gap-3 w-full mt-4">
-            <button 
-              onClick={() => addWater(250)} 
-              className="flex-1 py-3 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-2xl font-black text-[10px] uppercase transition-all active:scale-95 flex items-center justify-center gap-2"
-            >
-              <span className="text-base">🥛</span> 250ml
-            </button>
-            <button 
-              onClick={() => addWater(500)} 
-              className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-[10px] uppercase transition-all shadow-lg shadow-blue-100 active:scale-95 flex items-center justify-center gap-2"
-            >
-              <span className="text-base">💧</span> 500ml
-            </button>
+            <button onClick={() => addWater(250)} className="flex-1 py-3 bg-blue-50 text-blue-600 rounded-2xl font-black text-[10px] uppercase">🥛 250ml</button>
+            <button onClick={() => addWater(500)} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase">💧 500ml</button>
           </div>
         </div>
 
-        {/* Activity Summary */}
         <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col min-h-[280px]">
            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 mb-6">Effort Physique</h3>
            <div className="space-y-4 flex-1 overflow-y-auto no-scrollbar">
@@ -186,69 +147,38 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm">🏃‍♂️</div>
                   <div>
                     <p className="text-sm font-black text-slate-800">{w.type}</p>
-                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-tighter">{w.caloriesBurned} kcal brûlées</p>
+                    <p className="text-[10px] font-bold text-emerald-500 uppercase">{w.caloriesBurned} kcal</p>
                   </div>
                 </div>
               ))}
-              {(!user.workouts || user.workouts.filter(w => new Date(w.date).toDateString() === todayStr).length === 0) && (
-                <div className="h-full flex flex-col items-center justify-center py-6">
-                  <span className="text-3xl mb-2 opacity-20">⚡</span>
-                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Aucune activité</p>
-                </div>
-              )}
            </div>
         </div>
       </div>
 
-      {/* Meals Schedule */}
       <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-sm">
-        <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3">
-          <span className="text-2xl">🍱</span> Vos repas prévus
-        </h2>
+        <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3">🍱 Vos repas prévus</h2>
         <div className="space-y-6">
           {currentDayPlan ? (
             ['lunch', 'dinner'].map((type) => {
               const recipeId = (currentDayPlan as any)[type];
               const recipe = mealPlan?.recipes.find(r => r.id === recipeId);
-              const isEaten = (user.eatenMeals || []).some(
-                m => new Date(m.date).toDateString() === todayStr && m.mealType === type
-              );
+              const isEaten = (user.eatenMeals || []).some(m => new Date(m.date).toDateString() === todayStr && m.mealType === type);
 
               return (
-                <div key={type} className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${
-                  isEaten ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100'
-                }`}>
-                  <div className="flex items-center gap-4 text-center sm:text-left">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${isEaten ? 'bg-emerald-500 text-white' : 'bg-slate-100'}`}>
-                      {type === 'lunch' ? '🥗' : '🌙'}
-                    </div>
+                <div key={type} className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${isEaten ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${isEaten ? 'bg-emerald-500 text-white' : 'bg-slate-100'}`}>{type === 'lunch' ? '🥗' : '🌙'}</div>
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{type === 'lunch' ? 'Déjeuner' : 'Dîner'}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{type === 'lunch' ? 'Déjeuner' : 'Dîner'}</p>
                       <h4 className="text-lg font-black text-slate-800 leading-tight">{recipe?.name || 'Recette'}</h4>
                       <p className="text-xs font-bold text-emerald-600 mt-1">{recipe?.calories} kcal</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => recipe && toggleMealEaten(recipe.id, type as 'lunch' | 'dinner')}
-                    className={`w-full sm:w-auto px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                      isEaten 
-                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' 
-                        : 'bg-slate-900 text-white hover:bg-emerald-600'
-                    }`}
-                  >
-                    {isEaten ? 'CONSOMMÉ ✓' : 'MARQUER MANGÉ'}
-                  </button>
+                  <button onClick={() => recipe && toggleMealEaten(recipe.id, type as any)} className={`px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest ${isEaten ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>{isEaten ? 'CONSOMMÉ ✓' : 'MARQUER MANGÉ'}</button>
                 </div>
               );
             })
-          ) : (
-            <div className="text-center py-10">
-              <p className="text-slate-400 font-bold">Aucun plan repas actif pour aujourd'hui.</p>
-              <button className="text-emerald-500 font-black text-xs uppercase tracking-widest mt-4 hover:underline">
-                Générer un plan avec l'IA
-              </button>
-            </div>
-          )}
+          ) : <p className="text-center text-slate-400 py-10 font-bold">Aucun plan repas actif aujourd'hui.</p>}
         </div>
       </div>
     </div>

@@ -18,7 +18,7 @@ export class NotificationService {
     if (Notification.permission === "granted") {
       new Notification(title, {
         body,
-        icon: "https://cdn-icons-png.flaticon.com/512/706/706164.png", // Icône de nourriture générique
+        icon: "https://cdn-icons-png.flaticon.com/512/706/706164.png",
       });
     }
   }
@@ -27,9 +27,8 @@ export class NotificationService {
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
-    const dayOfMonth = (now.getDate() - 1) % 30; // On boucle sur les 30 jours du plan
+    const dayOfMonth = (now.getDate() - 1) % 30;
 
-    // Heures de repas configurables
     const LUNCH_TIME = { h: 12, m: 0 };
     const DINNER_TIME = { h: 19, m: 0 };
 
@@ -40,12 +39,13 @@ export class NotificationService {
 
     if (mealType && mealPlan.days[dayOfMonth]) {
       const recipeId = mealPlan.days[dayOfMonth][mealType];
-      const recipe = mealPlan.recipes[recipeId];
+      const recipe = mealPlan.recipes.find(r => r.id === recipeId);
       
-      const title = mealType === 'lunch' ? "🍱 C'est l'heure du déjeuner !" : "🌙 C'est l'heure du dîner !";
-      const body = `Bonjour ${userName}, votre repas prévu est : ${recipe.name}. Bon appétit !`;
-      
-      this.send(title, body);
+      if (recipe) {
+        const title = mealType === 'lunch' ? "🍱 C'est l'heure du déjeuner !" : "🌙 C'est l'heure du dîner !";
+        const body = `Bonjour ${userName}, votre repas prévu est : ${recipe.name}. Bon appétit !`;
+        this.send(title, body);
+      }
     }
   }
 }
