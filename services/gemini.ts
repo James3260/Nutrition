@@ -2,6 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MealPlan, User } from "../types";
 
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.error("ERREUR: La clé API Gemini (API_KEY) est manquante dans les variables d'environnement Vercel.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || '' });
+};
+
 const MEAL_PLAN_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -70,7 +78,7 @@ const CHAT_EXTRACTION_SCHEMA = {
 };
 
 export const chatWithAI = async (message: string, user: User): Promise<{ reply: string, extractedInfo?: any }> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
   
   const systemInstruction = `Tu es NutriTrack, un coach nutritionnel expert. 
   Ton but est d'aider l'utilisateur à perdre du poids. 
@@ -110,7 +118,7 @@ export const chatWithAI = async (message: string, user: User): Promise<{ reply: 
 };
 
 export const generateMealPlan = async (userPrompt: string, user: User): Promise<MealPlan> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
   
   const morphoContext = `
     PROFIL PHYSIQUE : ${user.gender === 'man' ? 'Homme' : 'Femme'}, ${user.age} ans, ${user.height}cm, 
