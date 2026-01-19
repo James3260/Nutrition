@@ -1,0 +1,8 @@
+{
+  "name": "NutriTrack AI - Assistant Perte de Poids",
+  "description": "Une application complète de planification de repas pour la perte de poids avec assistant IA, calendrier mensuel, liste de courses et recettes détaillées.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

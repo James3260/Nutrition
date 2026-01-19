@@ -1,0 +1,23 @@
+
+{
+  "name": "NutriTrack AI - Assistant Nutrition",
+  "short_name": "NutriTrack",
+  "description": "Assistant de planification de repas intelligent pour la perte de poids.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/706/706164.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/706/706164.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
