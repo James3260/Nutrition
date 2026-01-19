@@ -13,11 +13,12 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
   const todayStr = today.toDateString();
   
   const planDay = mealPlan ? ((today.getDate() - 1) % 30) + 1 : null;
-  const currentDayPlan = mealPlan?.days.find(d => d.day === planDay);
+  const currentDayPlan = mealPlan?.days?.find(d => d.day === planDay);
 
   const bmr = useMemo(() => {
-    const weight = user.weightHistory?.length 
-      ? user.weightHistory[user.weightHistory.length - 1].weight 
+    const weightHistory = user.weightHistory || [];
+    const weight = weightHistory.length > 0 
+      ? weightHistory[weightHistory.length - 1].weight 
       : (user.gender === 'man' ? 80 : 65);
     const height = user.height || 170;
     const age = user.age || 30;
@@ -30,23 +31,23 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
 
   const caloriesBurned = useMemo(() => {
     return (user.workouts || [])
-      .filter(w => new Date(w.date).toDateString() === todayStr)
-      .reduce((sum, w) => sum + w.caloriesBurned, 0);
+      .filter(w => w && w.date && new Date(w.date).toDateString() === todayStr)
+      .reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
   }, [user.workouts, todayStr]);
 
   const caloriesEaten = useMemo(() => {
     return (user.eatenMeals || [])
-      .filter(m => new Date(m.date).toDateString() === todayStr)
+      .filter(m => m && m.date && new Date(m.date).toDateString() === todayStr)
       .reduce((sum, m) => {
-        const recipe = mealPlan?.recipes.find(r => r.id === m.recipeId);
+        const recipe = mealPlan?.recipes?.find(r => r.id === m.recipeId);
         return sum + (recipe?.calories || 0);
       }, 0);
   }, [user.eatenMeals, mealPlan, todayStr]);
 
   const hydrationToday = useMemo(() => {
     return (user.hydrationRecords || [])
-      .filter(r => new Date(r.date).toDateString() === todayStr)
-      .reduce((sum, r) => sum + r.amount, 0);
+      .filter(r => r && r.date && new Date(r.date).toDateString() === todayStr)
+      .reduce((sum, r) => sum + (r.amount || 0), 0);
   }, [user.hydrationRecords, todayStr]);
 
   const hydrationGoal = user.hydrationGoal || 2000;
@@ -142,7 +143,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
         <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col min-h-[280px]">
            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 mb-6">Effort Physique</h3>
            <div className="space-y-4 flex-1 overflow-y-auto no-scrollbar">
-              {user.workouts?.filter(w => new Date(w.date).toDateString() === todayStr).map(w => (
+              {(user.workouts || []).filter(w => w && w.date && new Date(w.date).toDateString() === todayStr).map(w => (
                 <div key={w.id} className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100/50">
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm">🏃‍♂️</div>
                   <div>
@@ -161,7 +162,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
           {currentDayPlan ? (
             ['lunch', 'dinner'].map((type) => {
               const recipeId = (currentDayPlan as any)[type];
-              const recipe = mealPlan?.recipes.find(r => r.id === recipeId);
+              const recipe = mealPlan?.recipes?.find(r => r.id === recipeId);
               const isEaten = (user.eatenMeals || []).some(m => new Date(m.date).toDateString() === todayStr && m.mealType === type);
 
               return (
@@ -178,7 +179,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
                 </div>
               );
             })
-          ) : <p className="text-center text-slate-400 py-10 font-bold">Aucun plan repas actif aujourd'hui.</p>}
+          ) : <p className="text-center text-slate-400 py-10 font-bold">Aucun plan repas actif aujourd'hui. Demandez à l'IA !</p>}
         </div>
       </div>
     </div>
