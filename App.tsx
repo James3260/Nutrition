@@ -31,7 +31,6 @@ const App: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [cloudStatus, setCloudStatus] = useState<'off' | 'syncing' | 'synced' | 'error'>('off');
   const [isCloudConfigured, setIsCloudConfigured] = useState(false);
-  const [showBioPrompt, setShowBioPrompt] = useState(false);
 
   const updateCloudConfigStatus = useCallback(() => {
     setIsCloudConfigured(CloudSyncService.isConfigured());
@@ -49,17 +48,15 @@ const App: React.FC = () => {
       if (data) {
         if (data.mealPlan) setMealPlan(data.mealPlan);
         if (data.chatMessages) setChatMessages(data.chatMessages);
-        if (data.user && data.user.email.toLowerCase() === 'admin@nutritrack.com') {
-          data.user.status = 'authorized';
-          data.user.role = 'admin';
+        if (data.user) {
+           // Forcer le statut autorisé lors de la récup cloud pour éviter le blocage
+           data.user.status = 'authorized';
+           setUser(data.user);
         }
-        if (data.user && data.user.email === targetEmail) setUser(data.user);
         setCloudStatus('synced');
         return data;
-      } else {
-        // Si pas de données mais configuré, on considère que c'est une réussite vide
-        setCloudStatus('synced');
       }
+      setCloudStatus('synced');
     } catch (e) {
       setCloudStatus('error');
     } finally {
@@ -86,19 +83,6 @@ const App: React.FC = () => {
       await CloudSyncService.init();
       updateCloudConfigStatus();
 
-      const hash = window.location.hash;
-      if (hash.startsWith("#setup=")) {
-        try {
-          const payload = JSON.parse(atob(hash.replace("#setup=", "")));
-          if (payload.cloudConfig) {
-            await CloudSyncService.setConfig(payload.cloudConfig.url, payload.cloudConfig.key);
-            updateCloudConfigStatus();
-            alert("Configuration Cloud importée !");
-          }
-        } catch(e) {}
-        window.location.hash = "";
-      }
-
       const savedUsers = await StorageService.loadData('all_users');
       const savedUser = await StorageService.loadData('current_user');
       const savedPlan = await StorageService.loadData('plan');
@@ -109,10 +93,8 @@ const App: React.FC = () => {
       else setAllUsers([{ id: 'admin-001', name: 'Admin', email: 'admin@nutritrack.com', password: 'admin', role: 'admin', status: 'authorized', isAuthenticated: false, exclusions: [], workouts: [], weightHistory: [] }]);
       
       if (savedUser) {
-        if (savedUser.email.toLowerCase() === 'admin@nutritrack.com') {
-          savedUser.status = 'authorized';
-          savedUser.role = 'admin';
-        }
+        // Sécurité : Tout utilisateur chargé localement est considéré comme autorisé pour cette session
+        savedUser.status = 'authorized';
         setUser(savedUser);
         if (CloudSyncService.isConfigured()) await syncWithCloud(savedUser.email);
       }
@@ -157,12 +139,9 @@ const App: React.FC = () => {
     
     if (existing) {
       if (existing.password === u.password) {
-        if (isAdminEmail) { existing.status = 'authorized'; existing.role = 'admin'; }
+        existing.status = 'authorized'; // On autorise systématiquement
         setUser(existing);
         if (CloudSyncService.isConfigured()) await syncWithCloud(u.email);
-        if (existing.status === 'authorized' && !existing.biometricId && BiometricService.isAvailable()) {
-          setTimeout(() => setShowBioPrompt(true), 1500);
-        }
       } else {
         alert("Mot de passe incorrect.");
         setCloudStatus('error');
@@ -170,8 +149,8 @@ const App: React.FC = () => {
     } else {
       const targetUser: User = { 
         ...u, 
-        id: isAdminEmail ? 'admin-001' : u.id,
-        status: isAdminEmail ? 'authorized' : 'pending', 
+        id: isAdminEmail ? 'admin-001' : Math.random().toString(36).substr(2, 9),
+        status: 'authorized', // Nouvel utilisateur -> autorisé immédiatement
         role: isAdminEmail ? 'admin' : 'user', 
         exclusions: [], workouts: [], weightHistory: [] 
       };
@@ -182,12 +161,13 @@ const App: React.FC = () => {
   };
 
   if (!isReady) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-emerald-600 text-white p-10 font-black">
+    <div className="h-screen flex flex-col items-center justify-center bg-emerald-600 text-white p-10 font-black text-center">
       <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4"></div>
-      SYNCHRONISATION...
+      PRÉPARATION DE VOTRE ESPACE...
     </div>
   );
 
+  // Si pas d'utilisateur ou pas autorisé, on affiche l'écran de Login
   if (!user || user.status !== 'authorized') {
     return <Login onLogin={handleLogin} currentUser={user} onLogout={() => setUser(null)} />;
   }
@@ -231,15 +211,11 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-white border-t py-2 px-6 flex items-center justify-between text-slate-400 text-[8px] uppercase tracking-widest font-black shrink-0">
-        <span>NutriTrack AI v2.8 Connectivity Fix</span>
+        <span>NutriTrack AI v2.9 Performance</span>
         <span className="flex items-center gap-3">
           <span className="flex items-center gap-1.5">
             <span className={`w-1.5 h-1.5 rounded-full ${isCloudConfigured ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-            {isCloudConfigured ? 'Clés OK' : 'Pas de Clés'}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${cloudStatus === 'synced' ? 'bg-emerald-500 animate-pulse' : cloudStatus === 'error' ? 'bg-rose-500' : 'bg-slate-300'}`}></span>
-            {cloudStatus === 'synced' ? 'Synchronisé' : cloudStatus === 'error' ? 'Erreur Base' : 'Hors Ligne'}
+            {isCloudConfigured ? 'Cloud OK' : 'Local Only'}
           </span>
         </span>
       </footer>
