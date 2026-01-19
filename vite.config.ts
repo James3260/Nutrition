@@ -7,8 +7,19 @@ export default defineConfig({
   define: {
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
   },
+  server: {
+    port: 3000
+  },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'chart.js', 'react-chartjs-2'],
+          gemini: ['@google/genai']
+        }
+      }
+    }
   }
 });

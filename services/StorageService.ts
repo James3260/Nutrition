@@ -8,38 +8,59 @@ export class StorageService {
 
   static async initDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.DB_NAME, 1);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-          db.createObjectStore(this.STORE_NAME);
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      try {
+        const request = indexedDB.open(this.DB_NAME, 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+            db.createObjectStore(this.STORE_NAME);
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => {
+          console.error("IndexedDB Error:", request.error);
+          reject(request.error);
+        };
+        request.onblocked = () => {
+          console.warn("IndexedDB blocked. Please close other tabs of this app.");
+        };
+      } catch (e) {
+        reject(e);
+      }
     });
   }
 
   static async saveData(key: string, data: any): Promise<void> {
-    const db = await this.initDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(this.STORE_NAME, "readwrite");
-      const store = transaction.objectStore(this.STORE_NAME);
-      store.put(data, key);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
+    try {
+      const db = await this.initDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(this.STORE_NAME, "readwrite");
+        const store = transaction.objectStore(this.STORE_NAME);
+        store.put(data, key);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+    } catch (e) {
+      console.warn("Could not save to IndexedDB, falling back to local storage", e);
+      localStorage.setItem(`fallback_${key}`, JSON.stringify(data));
+    }
   }
 
   static async loadData(key: string): Promise<any> {
-    const db = await this.initDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(this.STORE_NAME, "readonly");
-      const store = transaction.objectStore(this.STORE_NAME);
-      const request = store.get(key);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      const db = await this.initDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(this.STORE_NAME, "readonly");
+        const store = transaction.objectStore(this.STORE_NAME);
+        const request = store.get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    } catch (e) {
+      console.warn("Could not load from IndexedDB, falling back to local storage", e);
+      const fallback = localStorage.getItem(`fallback_${key}`);
+      return fallback ? JSON.parse(fallback) : null;
+    }
   }
 
   static async maintenance(user: User): Promise<User> {
@@ -55,10 +76,10 @@ export class StorageService {
   }
 
   static generateSyncLink(data: any): string {
-    // On ajoute la config cloud pour que le lien configure automatiquement le nouveau navigateur
     const cloudConfig = CloudSyncService.getConfig();
     const fullPayload = { ...data, cloudConfig };
     const json = JSON.stringify(fullPayload);
+    // Use encodeURIComponent to handle special characters in base64 safely
     const base64 = btoa(encodeURIComponent(json));
     return `${window.location.origin}${window.location.pathname}#sync=${base64}`;
   }
