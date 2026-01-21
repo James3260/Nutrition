@@ -1,6 +1,19 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+declare global {
+  // Fix: Define the AIStudio interface to match the expected global type
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    // Fix: Ensure the modifier and type match the existing declaration in the environment (readonly and AIStudio type)
+    readonly aistudio: AIStudio;
+  }
+}
+
 export class IconService {
   static async generateAppIcon(): Promise<string> {
     // Rule: When using gemini-3-pro-image-preview, users MUST select their own API key.
@@ -9,6 +22,7 @@ export class IconService {
     }
 
     // Rule: Create a new GoogleGenAI instance right before making an API call to ensure it uses the latest key.
+    // Use process.env.API_KEY directly as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const prompt = "A high-end, professional, modern minimalist app icon for 'NutriTrack AI'. The design features a stylized vibrant emerald green leaf intertwined with sleek digital AI circuit lines. Soft shadows, premium 3D render feel, white background, centered, symmetrical, 1024x1024 resolution.";
@@ -35,7 +49,7 @@ export class IconService {
       if (firstCandidate.content && firstCandidate.content.parts) {
         // Find the image part, do not assume it is the first part.
         for (const part of firstCandidate.content.parts) {
-          if (part.inlineData) {
+          if (part.inlineData && part.inlineData.data) {
             const base64EncodeString: string = part.inlineData.data;
             return `data:image/png;base64,${base64EncodeString}`;
           }

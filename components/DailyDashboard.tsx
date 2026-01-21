@@ -110,7 +110,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
         <div className="flex items-center gap-2 mt-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
           <p className="text-emerald-500 font-bold text-xs uppercase tracking-widest">
-            {currentDayPlan ? `Programme : Jour ${mealPlan?.days.indexOf(currentDayPlan) + 1}` : "Aucun programme en cours"}
+            {currentDayPlan && mealPlan ? `Programme : Jour ${mealPlan.days.indexOf(currentDayPlan) + 1}` : "Aucun programme en cours"}
           </p>
         </div>
       </div>
