@@ -5,133 +5,137 @@ import { CloudSyncService } from '../services/CloudSyncService';
 interface SyncModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onExport: () => void;
-  onImport: (data: string) => void;
-  onGenerateMagicLink: () => void;
   onCloudRestore: () => void;
 }
 
-const SyncModal: React.FC<SyncModalProps> = ({ 
-  isOpen, onClose, onExport, onImport, onGenerateMagicLink, onCloudRestore 
-}) => {
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [showCloudConfig, setShowCloudConfig] = useState(false);
-  const [cloudUrl, setCloudUrl] = useState('');
-  const [cloudKey, setCloudKey] = useState('');
-
-  useEffect(() => {
-    const config = CloudSyncService.getConfig();
-    if (config) {
-      setCloudUrl(config.url);
-      setCloudKey(config.key);
-    }
-  }, [isOpen]);
+const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose, onCloudRestore }) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [manualId, setManualId] = useState('');
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSaveCloudConfig = async () => {
-    if (cloudUrl && cloudKey) {
-      await CloudSyncService.setConfig(cloudUrl, cloudKey);
-      setIsSuccess(true);
-      setTimeout(() => { 
-        setIsSuccess(false); 
-        setShowCloudConfig(false); 
-        onCloudRestore(); 
-      }, 1500);
+  const handleCreateCloud = async () => {
+    setIsCreating(true);
+    // Updated: using ensureVaultExists instead of createNewVault
+    const id = await CloudSyncService.ensureVaultExists();
+    if (id) {
+      onCloudRestore();
+    } else {
+      setError("Impossible de créer le Cloud. Vérifiez votre connexion.");
     }
+    setIsCreating(false);
   };
 
-  const handleCopyAppUrl = () => {
-    const url = window.location.origin + window.location.pathname;
-    navigator.clipboard.writeText(url);
-    alert("URL de l'application copiée !");
+  const handleConnectManual = () => {
+    if (manualId.length < 5) {
+      setError("Code invalide.");
+      return;
+    }
+    CloudSyncService.setVaultId(manualId);
+    onCloudRestore();
+    onClose();
   };
+
+  const handleCopyLink = () => {
+    const link = CloudSyncService.generateMasterLink();
+    navigator.clipboard.writeText(link);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 3000);
+  };
+
+  const isConnected = CloudSyncService.isConfigured();
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-emerald-100">
-        <div className="bg-emerald-600 p-8 text-white relative">
-          <h3 className="text-2xl font-black">Accès & Synchronisation</h3>
-          <p className="text-emerald-100 text-xs font-bold uppercase tracking-widest mt-1">Utilisez l'app partout</p>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100">
+        
+        {/* Header Style App Store */}
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-white relative">
+          <h3 className="text-2xl font-black flex items-center gap-3">
+            <span className="text-3xl">☁️</span> NutriCloud
+          </h3>
+          <p className="text-emerald-100 text-[10px] font-black uppercase tracking-widest mt-1">Synchronisation Familiale</p>
           <button onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
         <div className="p-8 space-y-6">
-          {isSuccess ? (
-            <div className="py-10 text-center space-y-4">
-              <div className="w-20 h-20 bg-emerald-500 text-white rounded-full flex items-center justify-center text-4xl mx-auto shadow-lg animate-bounce">✓</div>
-              <p className="font-black text-slate-800 uppercase tracking-widest text-xs">Cloud Connecté & Actif</p>
+          {error && (
+            <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase text-center border border-rose-100 animate-pulse">
+              ⚠️ {error}
             </div>
-          ) : showCloudConfig ? (
-            <div className="space-y-4 animate-in slide-in-from-right-10 duration-300">
-               <button onClick={() => setShowCloudConfig(false)} className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2 hover:text-emerald-500 transition-colors">
-                 ← Retour
-               </button>
-               <h4 className="text-sm font-black text-slate-800">Clés de Synchronisation</h4>
-               <div className="space-y-3 pt-2">
-                 <input 
-                   type="text" 
-                   value={cloudUrl} 
-                   onChange={e => setCloudUrl(e.target.value)} 
-                   placeholder="URL Supabase (https://...)" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-500 font-bold"
-                 />
-                 <input 
-                   type="password" 
-                   value={cloudKey} 
-                   onChange={e => setCloudKey(e.target.value)} 
-                   placeholder="Clé API (anon key)" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-500 font-bold"
-                 />
-                 <button 
-                   onClick={handleSaveCloudConfig}
-                   className="w-full py-4 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100"
-                 >
-                   Enregistrer & Connecter
-                 </button>
-               </div>
+          )}
+
+          {!isConnected ? (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <p className="text-slate-500 text-sm font-medium">Activez le Cloud pour partager vos menus avec votre famille sur d'autres téléphones.</p>
+              </div>
+              
+              <button 
+                onClick={handleCreateCloud}
+                disabled={isCreating}
+                className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-3"
+              >
+                {isCreating ? (
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : "Activer mon Cloud Gratuit"}
+              </button>
+
+              <div className="relative flex items-center py-2">
+                <div className="flex-grow border-t border-slate-100"></div>
+                <span className="flex-shrink mx-4 text-[9px] font-black text-slate-300 uppercase tracking-widest">OU REJOINDRE</span>
+                <div className="flex-grow border-t border-slate-100"></div>
+              </div>
+
+              <div className="space-y-3">
+                <input 
+                  type="text" 
+                  value={manualId}
+                  onChange={(e) => setManualId(e.target.value)}
+                  placeholder="Coller le Code Cloud ici..." 
+                  className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 focus:border-emerald-500 rounded-2xl text-center font-black text-slate-700 outline-none transition-all uppercase"
+                />
+                <button 
+                  onClick={handleConnectManual}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all"
+                >
+                  Se connecter au Cloud existant
+                </button>
+              </div>
             </div>
           ) : (
-            <>
-              <div className="space-y-3">
-                 <div className="p-5 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-3">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Lien de l'Application</h4>
-                    <button 
-                      onClick={handleCopyAppUrl}
-                      className="w-full py-3.5 bg-white border-2 border-slate-200 text-slate-800 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:border-emerald-500 transition-all shadow-sm flex items-center justify-center gap-2"
-                    >
-                      <span>🌐</span> Copier l'URL d'accès
-                    </button>
-                    <p className="text-[8px] text-slate-400 text-center font-bold px-4">
-                      Utilisez cette URL pour ouvrir l'app sur n'importe quel navigateur.
-                    </p>
-                 </div>
-
-                 <div className="p-5 bg-emerald-50/50 rounded-[2rem] border border-emerald-100 space-y-3">
-                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest ml-1">Synchronisation auto</h4>
-                    <button 
-                      onClick={onGenerateMagicLink}
-                      className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-3"
-                    >
-                      <span>✨</span> Synchroniser un appareil
-                    </button>
-                    <p className="text-[8px] text-emerald-600/70 text-center font-bold px-4 leading-tight">
-                      Génère un lien contenant vos clés cloud pour tout connecter instantanément.
-                    </p>
+            <div className="space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="p-6 bg-emerald-50 rounded-[2.5rem] border-2 border-emerald-100 text-center">
+                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm text-2xl">✅</div>
+                 <h4 className="font-black text-slate-800 text-lg">Cloud Activé</h4>
+                 <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest mt-1">Synchronisation en temps réel</p>
+                 
+                 <div className="mt-6 p-4 bg-white rounded-2xl border border-emerald-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Votre Code Cloud Unique</p>
+                    <p className="text-xl font-black text-slate-900 tracking-wider select-all">{CloudSyncService.getVaultId()}</p>
                  </div>
               </div>
 
-              {!CloudSyncService.isConfigured() && (
-                <button 
-                  onClick={() => setShowCloudConfig(true)}
-                  className="w-full py-3 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em] hover:bg-emerald-50 rounded-xl transition-all"
-                >
-                  Gérer les clés Supabase
-                </button>
-              )}
-            </>
+              <button 
+                onClick={handleCopyLink}
+                className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${
+                  copySuccess ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'
+                }`}
+              >
+                {copySuccess ? 'Lien copié ! ✅' : 'Copier le Lien Magique'}
+              </button>
+
+              <button 
+                onClick={() => { CloudSyncService.disconnect(); onCloudRestore(); }}
+                className="w-full py-3 text-slate-400 font-black text-[9px] uppercase hover:text-rose-500 transition-colors"
+              >
+                Déconnecter ce téléphone du Cloud
+              </button>
+            </div>
           )}
         </div>
       </div>

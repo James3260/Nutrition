@@ -2,16 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MealPlan, User } from "../types";
 
-const getAI = () => {
-  let apiKey = '';
-  try {
-    apiKey = process.env.API_KEY || '';
-  } catch (e) {
-    console.warn("process.env non disponible");
-  }
-  
-  return new GoogleGenAI({ apiKey });
-};
+// Always initialize GoogleGenAI with a named parameter for apiKey
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const MEAL_PLAN_SCHEMA = {
   type: Type.OBJECT,
@@ -81,8 +73,6 @@ const CHAT_EXTRACTION_SCHEMA = {
 };
 
 export const chatWithAI = async (message: string, user: User): Promise<{ reply: string, extractedInfo?: any }> => {
-  const ai = getAI();
-  
   const systemInstruction = `Tu es NutriTrack, un coach nutritionnel expert. 
   Ton but est d'aider l'utilisateur à perdre du poids. 
   
@@ -110,6 +100,7 @@ export const chatWithAI = async (message: string, user: User): Promise<{ reply: 
       },
     });
 
+    // Access the .text property directly
     const result = JSON.parse(response.text || '{}');
     return result;
   } catch (error) {
@@ -119,8 +110,6 @@ export const chatWithAI = async (message: string, user: User): Promise<{ reply: 
 };
 
 export const generateMealPlan = async (userPrompt: string, user: User): Promise<MealPlan> => {
-  const ai = getAI();
-  
   const morphoContext = `
     PROFIL PHYSIQUE : ${user.gender === 'man' ? 'Homme' : 'Femme'}, ${user.age} ans, ${user.height}cm, 
     poids actuel ${user.weightHistory?.[user.weightHistory.length - 1]?.weight || '70'}kg, 
@@ -137,6 +126,7 @@ export const generateMealPlan = async (userPrompt: string, user: User): Promise<
       },
     });
 
+    // Access the .text property directly
     return JSON.parse(response.text || '{}');
   } catch (error) {
     console.error("Erreur MealPlan:", error);

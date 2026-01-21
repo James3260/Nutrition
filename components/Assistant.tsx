@@ -23,6 +23,8 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   const [isLoading, setIsLoading] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<MealPlan | null>(null);
   const [shortList, setShortList] = useState<string[] | null>(null);
+  // État pour la date de début choisie par l'utilisateur
+  const [chosenStartDate, setChosenStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,10 +38,22 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
   const handleFinalizePlan = () => {
     if (pendingPlan) {
-      setMealPlan(pendingPlan);
+      // On utilise la date choisie via l'input
+      const finalizedPlan: MealPlan = {
+        ...pendingPlan,
+        startDate: new Date(chosenStartDate).toISOString()
+      };
+      setMealPlan(finalizedPlan);
+      
+      const formattedDate = new Date(chosenStartDate).toLocaleDateString('fr-FR', { 
+        weekday: 'long', 
+        day: 'numeric', 
+        month: 'long' 
+      });
+
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: "C'est validé ! ✅ Votre programme personnalisé de 30 jours est maintenant actif. Vous pouvez consulter vos repas dans l'onglet 'Aujourd'hui' et le 'Calendrier'. Bon appétit !" 
+        content: `C'est validé ! ✅ Votre programme de 30 jours est programmé pour commencer le ${formattedDate}. Retrouvez tous vos repas dans l'onglet Calendrier.` 
       }]);
       setPendingPlan(null);
       setShortList(null);
@@ -56,16 +70,14 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     setIsLoading(true);
 
     try {
-      // Si l'utilisateur demande un plan et qu'on n'a pas encore proposé de short-list
       if ((userMsg.toLowerCase().includes('plan') || userMsg.toLowerCase().includes('repas')) && !shortList) {
         const plan = await generateMealPlan(userMsg, user);
-        // On extrait 7 repas uniques pour la pré-validation
         const sampleMeals = plan.recipes.slice(0, 7).map(r => r.name);
         setShortList(sampleMeals);
         setPendingPlan(plan);
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: "D'accord, je prépare votre mois ! Mais avant de tout figer, voici les 7 repas de base que j'ai sélectionnés pour vous. Est-ce que cette sélection vous convient ?",
+          content: "D'accord, je prépare votre mois ! Voici un aperçu de la première semaine. À partir de quand souhaitez-vous commencer ?",
           proposedShortList: sampleMeals
         }]);
       } else {
@@ -93,7 +105,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
   return (
     <div className="flex flex-col h-full max-h-[calc(100vh-140px)] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden relative">
-      {/* Header */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-emerald-100">🤖</div>
@@ -107,51 +118,55 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         </div>
       </div>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 bg-slate-50/30 custom-scrollbar">
         {messages.map((msg, i) => (
-          <div 
-            key={i} 
-            className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start animate-in fade-in slide-in-from-bottom-4 duration-500'}`}
-          >
-            <div 
-              className={`max-w-[85%] md:max-w-[70%] px-6 py-4 rounded-[2rem] text-[15px] leading-relaxed shadow-sm transition-all hover:shadow-md ${
-                msg.role === 'user' 
-                  ? 'bg-slate-900 text-white rounded-br-none' 
-                  : 'bg-white text-slate-700 rounded-bl-none border border-slate-200'
-              }`}
-            >
+          <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start animate-in fade-in slide-in-from-bottom-4 duration-500'}`}>
+            <div className={`max-w-[85%] md:max-w-[70%] px-6 py-4 rounded-[2rem] text-[15px] leading-relaxed shadow-sm transition-all hover:shadow-md ${msg.role === 'user' ? 'bg-slate-900 text-white rounded-br-none' : 'bg-white text-slate-700 rounded-bl-none border border-slate-200'}`}>
               {msg.content}
             </div>
 
-            {/* Validation des 7 repas */}
             {msg.proposedShortList && (
-              <div className="mt-4 w-full max-w-sm bg-white rounded-[2.5rem] border-2 border-emerald-100 p-8 shadow-xl animate-in zoom-in-95 duration-300">
+              <div className="mt-4 w-full max-w-sm bg-white rounded-[3.5rem] border-2 border-emerald-100 p-8 shadow-2xl animate-in zoom-in-95 duration-300">
                 <div className="flex items-center gap-3 mb-4">
-                   <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 font-bold">7</div>
-                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Ma proposition de menus</h4>
+                   <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 font-bold">1</div>
+                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Semaine de démarrage</h4>
                 </div>
-                <ul className="space-y-3 mb-8">
-                  {msg.proposedShortList.map((meal, idx) => (
-                    <li key={idx} className="flex items-center gap-3 text-sm text-slate-700 font-bold p-3 bg-slate-50 rounded-2xl border border-slate-100/50">
-                      <span className="text-emerald-500 text-xs">#0{idx+1}</span>
-                      {meal}
+                
+                <ul className="space-y-2 mb-6">
+                  {msg.proposedShortList.slice(0, 3).map((meal, idx) => (
+                    <li key={idx} className="text-xs text-slate-600 font-bold p-2 bg-slate-50 rounded-xl border border-slate-100/50">
+                      🥗 {meal}
                     </li>
                   ))}
+                  <li className="text-[10px] text-slate-400 text-center font-bold italic">... +27 autres repas équilibrés</li>
                 </ul>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleFinalizePlan}
-                    className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95"
-                  >
-                    Valider le plan ✅
-                  </button>
-                  <button 
-                    onClick={() => { setShortList(null); setPendingPlan(null); setMessages(prev => [...prev, { role: 'user', content: "Peux-tu me proposer d'autres idées s'il te plaît ?" }]); }}
-                    className="px-6 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all"
-                  >
-                    Modifier
-                  </button>
+
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date de début du plan</label>
+                    <input 
+                      type="date" 
+                      value={chosenStartDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setChosenStartDate(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-100 border-2 border-transparent focus:border-emerald-500/20 rounded-xl text-slate-800 font-bold text-sm outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={handleFinalizePlan} 
+                      className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95"
+                    >
+                      Activer le programme ✅
+                    </button>
+                    <button 
+                      onClick={() => { setShortList(null); setPendingPlan(null); setMessages(prev => [...prev, { role: 'user', content: "Peux-tu me proposer d'autres idées s'il te plaît ?" }]); }} 
+                      className="w-full py-3 text-slate-400 rounded-2xl font-black text-[9px] uppercase hover:text-rose-500 transition-all"
+                    >
+                      Refaire la proposition
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -172,24 +187,11 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Form */}
       <div className="p-6 md:px-10 md:pb-8 bg-white border-t border-slate-100">
         <form onSubmit={handleSubmit} className="relative max-w-4xl mx-auto group">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Échangez avec votre coach..."
-            className="w-full pl-8 pr-20 py-5 bg-slate-100 rounded-[2rem] border-2 border-transparent focus:border-emerald-500/20 focus:bg-white focus:ring-0 text-slate-800 placeholder:text-slate-400 font-medium transition-all text-md shadow-inner"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="absolute right-2 top-2 bottom-2 w-14 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center hover:bg-emerald-600 transition-all disabled:opacity-20 active:scale-90 shadow-lg"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Échangez avec votre coach..." className="w-full pl-8 pr-20 py-5 bg-slate-100 rounded-[2rem] border-2 border-transparent focus:border-emerald-500/20 focus:bg-white focus:ring-0 text-slate-800 placeholder:text-slate-400 font-medium transition-all text-md shadow-inner" />
+          <button type="submit" disabled={isLoading || !input.trim()} className="absolute right-2 top-2 bottom-2 w-14 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center hover:bg-emerald-600 transition-all disabled:opacity-20 active:scale-90 shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
           </button>
         </form>
       </div>

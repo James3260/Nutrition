@@ -2,107 +2,166 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { BiometricService } from '../services/BiometricService';
+import { StorageService } from '../services/StorageService';
 
-interface LoginProps {
+interface AuthProps {
   onLogin: (user: User) => void;
-  currentUser: User | null;
-  onLogout: () => void;
+  allUsers: User[];
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, currentUser, onLogout }) => {
-  const [name, setName] = useState('');
+const Login: React.FC<AuthProps> = ({ onLogin, allUsers }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isBioAvailable, setIsBioAvailable] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    setIsBioAvailable(BiometricService.isAvailable());
+    setBioAvailable(BiometricService.isAvailable());
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) return;
-    
-    const isMainAdmin = email.toLowerCase() === 'admin@nutritrack.com';
-    
-    const loginPayload: User = {
-      id: isMainAdmin ? 'admin-001' : Math.random().toString(36).substr(2, 9),
-      name: isMainAdmin ? 'Administrateur' : name,
-      email: email.toLowerCase(),
-      password: password,
-      role: isMainAdmin ? 'admin' : 'user',
-      status: isMainAdmin ? 'authorized' : 'pending',
-      isAuthenticated: true
-    };
+    setIsLoading(true);
+    setError('');
 
-    onLogin(loginPayload);
-  };
+    if (!email || !password) {
+      setError("Veuillez remplir tous les champs.");
+      setIsLoading(false);
+      return;
+    }
 
-  const handleBiometricLogin = async () => {
-    const success = await BiometricService.authenticate();
-    if (success && currentUser) {
-      onLogin({ ...currentUser, isAuthenticated: true });
-    } else {
-      alert("Échec de l'authentification biométrique.");
+    try {
+      // Recherche stricte dans la liste des utilisateurs autorisés
+      const targetUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
+      
+      if (!targetUser) {
+        setError("Compte non autorisé ou inconnu.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Vérification stricte du mot de passe
+      if (targetUser.password !== password) {
+        setError("Mot de passe incorrect.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Connexion réussie
+      onLogin({ ...targetUser, isAuthenticated: true });
+      
+    } catch (err) {
+      setError("Une erreur est survenue lors de la connexion.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (currentUser && currentUser.status === 'pending') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-emerald-50 p-4 text-center">
-        <div className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-md border-t-8 border-amber-400">
-          <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mx-auto mb-6 text-3xl">⏳</div>
-          <h2 className="text-2xl font-black text-slate-800">Compte en attente</h2>
-          <p className="text-slate-500 mt-4 text-sm font-medium">Validation administrative requise pour <strong>{currentUser.name}</strong>.</p>
-          <div className="mt-8 space-y-4">
-             <button onClick={onLogout} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-all">Retour au login</button>
-             {currentUser.email.toLowerCase() === 'admin@nutritrack.com' && (
-               <p className="text-[10px] text-rose-500 font-bold">Erreur de détection Admin. Veuillez réessayer de vous connecter.</p>
-             )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleBiometricAuth = async () => {
+    setIsLoading(true);
+    const success = await BiometricService.authenticate();
+    if (success) {
+      const savedUser = await StorageService.loadData('current_user');
+      // Pour la biométrie, on vérifie aussi que l'utilisateur est toujours dans allUsers
+      if (savedUser && allUsers.some(u => u.id === savedUser.id)) {
+        onLogin({ ...savedUser, isAuthenticated: true });
+      } else {
+        setError("Aucun profil biométrique valide sur cet appareil.");
+      }
+    } else {
+      setError("Authentification biométrique annulée ou échouée.");
+    }
+    setIsLoading(false);
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-700 p-4">
-      <div className="bg-white p-8 sm:p-10 rounded-[3rem] shadow-2xl w-full max-w-md border border-white/20">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 font-black text-2xl mx-auto mb-6 shadow-inner">N</div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tighter">NutriTrack AI</h1>
-          <p className="text-slate-400 mt-2 font-bold uppercase text-[9px] tracking-[0.2em]">Authentification Sécurisée</p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-6 selection:bg-emerald-500/30">
+      <div className="bg-white rounded-[3.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] w-full max-w-md p-10 md:p-14 relative overflow-hidden border border-white/10 animate-scale-in">
+        
+        {/* Background Accents */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -ml-20 -mb-20"></div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2">Nom complet</label>
-            <input required type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Prénom & Nom" className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-emerald-500 outline-none transition-all bg-slate-50/50 text-slate-900 font-bold text-sm" />
+        <div className="relative z-10 text-center">
+          <div className="w-20 h-20 bg-emerald-600 text-white rounded-[1.8rem] flex items-center justify-center text-4xl font-black mx-auto mb-8 shadow-2xl shadow-emerald-500/20">
+            N
           </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2">Email</label>
-            <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-emerald-500 outline-none transition-all bg-slate-50/50 text-slate-900 font-bold text-sm" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2">Mot de passe</label>
-            <div className="relative">
-              <input required type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 focus:border-emerald-500 outline-none transition-all bg-slate-50/50 text-slate-900 font-bold text-sm" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 font-black text-xs hover:text-emerald-500 transition-colors">{showPassword ? "HIDE" : "SHOW"}</button>
+          
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-2">
+            NutriTrack AI
+          </h1>
+          
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-10">
+            Accès Privé
+          </p>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {error && (
+              <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-rose-100 animate-pulse">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Identifiant</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nene2080@icloud.com"
+                className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-emerald-500/20 rounded-2xl text-slate-900 font-medium outline-none transition-all placeholder:text-slate-300"
+              />
             </div>
-          </div>
 
-          <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-100 mt-4">S'identifier</button>
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Mot de passe</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-emerald-500/20 rounded-2xl text-slate-900 font-medium outline-none transition-all placeholder:text-slate-300"
+              />
+            </div>
 
-          {isBioAvailable && currentUser?.biometricId && (
-            <div className="flex flex-col items-center gap-3 mt-6 pt-6 border-t border-slate-100">
-               <button type="button" onClick={handleBiometricLogin} className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center hover:bg-emerald-100 transition-all active:scale-90 shadow-md">
-                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
-               </button>
-               <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em]">Se connecter avec Face ID</p>
+            <button 
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95"
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : "S'identifier"}
+            </button>
+          </form>
+
+          {bioAvailable && (
+            <div className="mt-8 flex flex-col items-center">
+              <div className="w-full h-px bg-slate-100 mb-8 flex items-center justify-center">
+                <span className="bg-white px-4 text-[9px] font-black text-slate-300 uppercase tracking-[0.3em]">Ou</span>
+              </div>
+              
+              <button 
+                onClick={handleBiometricAuth}
+                className="flex flex-col items-center gap-3 text-slate-400 hover:text-emerald-500 transition-colors group"
+              >
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center border-2 border-transparent group-hover:border-emerald-100 group-hover:bg-emerald-50 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0112 3c1.22 0 2.383.218 3.46.616m.835 1.908c.367.494.665 1.05.888 1.637a9.996 9.996 0 01.714 3.59c0 5.42-3.355 9.994-8.143 11.857M15 11h.01" />
+                  </svg>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Biométrie</span>
+              </button>
             </div>
           )}
-        </form>
+        </div>
+
+        <div className="mt-12 pt-8 border-t border-slate-100 text-center relative z-10">
+          <p className="text-[8px] text-slate-300 font-bold uppercase tracking-[0.2em]">
+            Protection Intégrale AES-256
+          </p>
+        </div>
       </div>
     </div>
   );

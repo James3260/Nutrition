@@ -1,19 +1,35 @@
 
 import React, { useMemo } from 'react';
-import { User, MealPlan, HydrationRecord } from '../types';
+import { User, MealPlan, HydrationRecord, HistoryEvent } from '../types';
+import HistoryLog from './HistoryLog';
 
 interface DailyDashboardProps {
   user: User;
   mealPlan: MealPlan | null;
   onUpdateUser: (updatedUser: User) => void;
+  historyLogs: HistoryEvent[];
 }
 
-const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdateUser }) => {
+const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdateUser, historyLogs }) => {
   const today = new Date();
   const todayStr = today.toDateString();
   
-  const planDay = mealPlan ? ((today.getDate() - 1) % 30) + 1 : null;
-  const currentDayPlan = mealPlan?.days?.find(d => d.day === planDay);
+  // Calcul du jour relatif au début du programme
+  const currentDayPlan = useMemo(() => {
+    if (!mealPlan || !mealPlan.startDate) return null;
+    const start = new Date(mealPlan.startDate);
+    start.setHours(0, 0, 0, 0);
+    const now = new Date(today);
+    now.setHours(0, 0, 0, 0);
+    
+    const diffTime = now.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // On boucle si on dépasse 30 jours, ou on retourne null si on n'a pas commencé
+    if (diffDays < 0) return null;
+    const dayIndex = diffDays % 30;
+    return mealPlan.days[dayIndex];
+  }, [mealPlan, today]);
 
   const bmr = useMemo(() => {
     const weightHistory = user.weightHistory || [];
@@ -93,7 +109,9 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
         </h1>
         <div className="flex items-center gap-2 mt-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-          <p className="text-emerald-500 font-bold text-xs uppercase tracking-widest">Tableau de bord actif</p>
+          <p className="text-emerald-500 font-bold text-xs uppercase tracking-widest">
+            {currentDayPlan ? `Programme : Jour ${mealPlan?.days.indexOf(currentDayPlan) + 1}` : "Aucun programme en cours"}
+          </p>
         </div>
       </div>
 
@@ -140,24 +158,13 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
           </div>
         </div>
 
-        <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col min-h-[280px]">
-           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 mb-6">Effort Physique</h3>
-           <div className="space-y-4 flex-1 overflow-y-auto no-scrollbar">
-              {(user.workouts || []).filter(w => w && w.date && new Date(w.date).toDateString() === todayStr).map(w => (
-                <div key={w.id} className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100/50">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm">🏃‍♂️</div>
-                  <div>
-                    <p className="text-sm font-black text-slate-800">{w.type}</p>
-                    <p className="text-[10px] font-bold text-emerald-500 uppercase">{w.caloriesBurned} kcal</p>
-                  </div>
-                </div>
-              ))}
-           </div>
+        <div className="space-y-6 flex flex-col min-h-[280px]">
+           <HistoryLog events={historyLogs} limit={5} title="Activités Récentes" showIcon={false} />
         </div>
       </div>
 
       <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-sm">
-        <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3">🍱 Vos repas prévus</h2>
+        <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3">🍱 Vos repas du jour</h2>
         <div className="space-y-6">
           {currentDayPlan ? (
             ['lunch', 'dinner'].map((type) => {
@@ -179,7 +186,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
                 </div>
               );
             })
-          ) : <p className="text-center text-slate-400 py-10 font-bold">Aucun plan repas actif aujourd'hui. Demandez à l'IA !</p>}
+          ) : <p className="text-center text-slate-400 py-10 font-bold">Aucun plan repas actif aujourd'hui. Demandez à l'IA de générer votre programme !</p>}
         </div>
       </div>
     </div>

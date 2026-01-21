@@ -21,6 +21,7 @@ export interface DayPlan {
 export interface MealPlan {
   days: DayPlan[];
   recipes: Recipe[];
+  startDate?: string; // Date ISO du début du programme
 }
 
 export interface WorkoutSession {
@@ -48,6 +49,16 @@ export interface EatenMealRecord {
   recipeId: string;
 }
 
+export interface HistoryEvent {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
+  type: 'system' | 'meal' | 'profile' | 'sport' | 'admin';
+}
+
 export interface User {
   id: string;
   name: string;
@@ -56,7 +67,7 @@ export interface User {
   role: 'admin' | 'user';
   status: 'authorized' | 'pending';
   isAuthenticated: boolean;
-  biometricId?: string; // ID pour l'authentification FaceID
+  biometricId?: string;
   exclusions?: string[];
   workouts?: WorkoutSession[];
   weightHistory?: WeightRecord[];

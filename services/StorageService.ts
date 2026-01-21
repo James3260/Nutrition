@@ -17,13 +17,8 @@ export class StorageService {
           }
         };
         request.onsuccess = () => resolve(request.result);
-        request.onerror = () => {
-          console.error("IndexedDB Error:", request.error);
-          reject(request.error);
-        };
-        request.onblocked = () => {
-          console.warn("IndexedDB blocked. Please close other tabs of this app.");
-        };
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => console.warn("IndexedDB blocked");
       } catch (e) {
         reject(e);
       }
@@ -41,7 +36,6 @@ export class StorageService {
         transaction.onerror = () => reject(transaction.error);
       });
     } catch (e) {
-      console.warn("Could not save to IndexedDB, falling back to local storage", e);
       localStorage.setItem(`fallback_${key}`, JSON.stringify(data));
     }
   }
@@ -57,40 +51,15 @@ export class StorageService {
         request.onerror = () => reject(request.error);
       });
     } catch (e) {
-      console.warn("Could not load from IndexedDB, falling back to local storage", e);
       const fallback = localStorage.getItem(`fallback_${key}`);
       return fallback ? JSON.parse(fallback) : null;
     }
   }
 
-  static async maintenance(user: User): Promise<User> {
-    const updatedUser = { ...user };
-    const MAX_HISTORY = 365;
-    if (updatedUser.weightHistory && updatedUser.weightHistory.length > MAX_HISTORY) {
-      updatedUser.weightHistory = updatedUser.weightHistory.slice(-MAX_HISTORY);
-    }
-    if (updatedUser.workouts && updatedUser.workouts.length > MAX_HISTORY) {
-      updatedUser.workouts = updatedUser.workouts.slice(-MAX_HISTORY);
-    }
-    return updatedUser;
-  }
-
-  static generateSyncLink(data: any): string {
-    const cloudConfig = CloudSyncService.getConfig();
-    const fullPayload = { ...data, cloudConfig };
-    const json = JSON.stringify(fullPayload);
-    // Use encodeURIComponent to handle special characters in base64 safely
-    const base64 = btoa(encodeURIComponent(json));
-    return `${window.location.origin}${window.location.pathname}#sync=${base64}`;
-  }
-
-  static decodeSyncLink(hash: string): any {
-    try {
-      const base64 = hash.replace("#sync=", "");
-      const json = decodeURIComponent(atob(base64));
-      return JSON.parse(json);
-    } catch (e) {
-      return null;
-    }
+  /**
+   * Utilise maintenant le lien de production stable
+   */
+  static generateSyncLink(): string {
+    return CloudSyncService.generateMasterLink();
   }
 }
