@@ -107,25 +107,30 @@ const App: React.FC = () => {
 
       if (savedUser) setUser(savedUser);
       
-      if (savedUsersList && savedUsersList.length > 0) {
-        setAllUsers(savedUsersList);
-      } else {
-        // Init avec admin par défaut ET son mot de passe
-        setAllUsers([{
-          id: btoa(ADMIN_EMAIL),
-          name: 'Admin',
-          email: ADMIN_EMAIL,
-          password: DEFAULT_ADMIN_PASS,
-          role: 'admin',
-          status: 'authorized',
-          isAuthenticated: false,
-          exclusions: [],
-          workouts: [],
-          weightHistory: [],
-          hydrationRecords: [],
-          eatenMeals: []
-        }]);
+      // LOGIQUE DE SÉCURITÉ : On s'assure que l'admin est toujours là
+      const adminUser: User = {
+        id: btoa(ADMIN_EMAIL),
+        name: 'Admin',
+        email: ADMIN_EMAIL,
+        password: DEFAULT_ADMIN_PASS,
+        role: 'admin',
+        status: 'authorized',
+        isAuthenticated: false,
+        exclusions: [],
+        workouts: [],
+        weightHistory: [],
+        hydrationRecords: [],
+        eatenMeals: []
+      };
+
+      let initialUsers: User[] = Array.isArray(savedUsersList) ? savedUsersList : [];
+      
+      // Si l'admin n'est pas dans la liste récupérée, on l'ajoute de force
+      if (!initialUsers.find(u => u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase())) {
+        initialUsers.push(adminUser);
       }
+      
+      setAllUsers(initialUsers);
       
       if (savedPlan) setMealPlan(savedPlan);
       if (savedChat) setChatMessages(savedChat);
@@ -185,7 +190,7 @@ const App: React.FC = () => {
       id: btoa(email),
       name,
       email,
-      password: password || "1234", // Défaut si non précisé
+      password: password || "1234",
       role: email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user',
       status: 'authorized',
       isAuthenticated: false,

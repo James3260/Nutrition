@@ -2,15 +2,15 @@
 import { GoogleGenAI } from "@google/genai";
 
 declare global {
-  // Fix: Define the AIStudio interface to match the expected global type
+  // Define the AIStudio interface for managing API keys in the environment.
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
 
   interface Window {
-    // Fix: Ensure the modifier and type match the existing declaration in the environment (readonly and AIStudio type)
-    readonly aistudio: AIStudio;
+    // Removed readonly to match the environment's internal property definition.
+    aistudio: AIStudio;
   }
 }
 
