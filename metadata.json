@@ -1,6 +1,6 @@
 {
-  "name": "NutriTrack AI - Assistant Perte de Poids",
-  "description": "Une application complète de planification de repas pour la perte de poids avec assistant IA, calendrier mensuel, liste de courses et recettes détaillées.",
+  "name": "NutriTrack AI Premium - Votre Coach Crystal",
+  "description": "Une expérience de nutrition d'élite avec assistant IA, calendrier mensuel intelligent et recettes gastronomiques optimisées.",
   "requestFramePermissions": [
     "camera",
     "microphone"

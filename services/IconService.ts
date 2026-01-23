@@ -1,31 +1,23 @@
 
-import { GoogleGenAI } from "@google/genai";
+import {GoogleGenAI} from "@google/genai";
 
-declare global {
-  // Define the AIStudio interface for managing API keys in the environment.
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
-
-  interface Window {
-    // Removed readonly modifier to ensure identical modifiers with environmental declarations.
-    aistudio: AIStudio;
-  }
-}
+// The local declare global block was removed because it caused duplicate identifier and modifier conflict errors
+// with the existing ambient environment declarations. We now access aistudio via the window object.
 
 export class IconService {
   static async generateAppIcon(): Promise<string> {
-    // Rule: When using gemini-3-pro-image-preview, users MUST select their own API key.
-    if (!(await window.aistudio.hasSelectedApiKey())) {
-      await window.aistudio.openSelectKey();
+    // Règle : Pour gemini-3-pro-image-preview, l'utilisateur doit sélectionner sa clé via l'interface aistudio.
+    // Using a type assertion on window to satisfy the compiler while avoiding declaration conflicts.
+    const aistudio = (window as any).aistudio;
+    if (!(await aistudio.hasSelectedApiKey())) {
+      await aistudio.openSelectKey();
     }
 
-    // Rule: Create a new GoogleGenAI instance right before making an API call to ensure it uses the latest key.
+    // Always create a new GoogleGenAI instance right before making an API call to ensure it uses the most up-to-date key from the dialog.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Nouveau prompt ultra-premium pour un logo iconique
-    const prompt = "A high-end luxury mobile app icon for 'NutriTrack AI'. A minimalist abstract 3D emblem: a singular, glowing emerald-green crystalline structure shaped like a stylized 'N' that subtly evokes an organic leaf. The icon features a soft internal bioluminescence, encased in a polished dark obsidian glass frame with elegant chamfered edges. Photorealistic 8k render, cinematic studio lighting, deep shadows, premium aesthetic, set against a solid deep midnight black background. No text, symmetrical, masterpiece.";
+    // Prompt "Modern Crystal" : lumineux, épuré, organique et technologique
+    const prompt = "Luxury minimalist 3D mobile app icon for 'NutriTrack AI'. A stylized letter 'N' formed by two interlocking translucent emerald-green glass ribbons that subtly resemble organic leaves. The structure features soft prismatic light refractions and a high-gloss crystalline finish. Set against a pure, clean, bright white background with soft ambient occlusion shadows. 8k resolution, cinematic lighting, sophisticated wellness aesthetic, no text, centered, masterpiece.";
 
     try {
       const response = await ai.models.generateContent({
@@ -47,20 +39,19 @@ export class IconService {
 
       const firstCandidate = response.candidates[0];
       if (firstCandidate.content && firstCandidate.content.parts) {
-        // Find the image part as recommended by the SDK guidelines.
+        // Iterate through all parts as nano banana series models can return mixed content types.
         for (const part of firstCandidate.content.parts) {
           if (part.inlineData && part.inlineData.data) {
-            const base64EncodeString: string = part.inlineData.data;
-            return `data:image/png;base64,${base64EncodeString}`;
+            return `data:image/png;base64,${part.inlineData.data}`;
           }
         }
       }
 
-      throw new Error("Aucune donnée d'image trouvée dans la réponse.");
+      throw new Error("Aucune donnée d'image trouvée.");
     } catch (error: any) {
-      // Rule: If Requested entity was not found, prompt user to select a key again.
+      // If the request fails with "Requested entity was not found", reset the selection state and prompt the user again.
       if (error.message?.includes("Requested entity was not found")) {
-        await window.aistudio.openSelectKey();
+        await aistudio.openSelectKey();
       }
       console.error("Erreur IconService:", error);
       throw error;
@@ -68,7 +59,7 @@ export class IconService {
   }
 
   static applyIcon(base64Icon: string) {
-    // Update Favicon
+    // Mise à jour du Favicon
     let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (!favicon) {
       favicon = document.createElement('link');
@@ -77,7 +68,7 @@ export class IconService {
     }
     favicon.href = base64Icon;
 
-    // Update Apple Touch Icon
+    // Mise à jour de l'icône iOS
     let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
     if (!appleIcon) {
       appleIcon = document.createElement('link');
@@ -86,13 +77,14 @@ export class IconService {
     }
     appleIcon.href = base64Icon;
 
-    // Create and update Web Manifest
+    // Création d'un Manifest dynamique pour la PWA
     const manifestContent = {
       "name": "NutriTrack AI Premium",
       "short_name": "NutriTrack",
+      "description": "Assistant Nutritionnel IA de Luxe",
       "start_url": "/",
       "display": "standalone",
-      "background_color": "#020617",
+      "background_color": "#ffffff",
       "theme_color": "#10b981",
       "icons": [
         {

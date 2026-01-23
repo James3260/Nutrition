@@ -1,11 +1,11 @@
 
 {
-  "name": "NutriTrack AI - Assistant Nutrition",
+  "name": "NutriTrack AI Premium",
   "short_name": "NutriTrack",
-  "description": "Assistant de planification de repas intelligent pour la perte de poids.",
+  "description": "Assistant de planification de repas intelligent et luxueux pour votre bien-être.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
+  "background_color": "#ffffff",
   "theme_color": "#10b981",
   "icons": [
     {

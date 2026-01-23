@@ -1,5 +1,5 @@
 
-import { MealPlan } from "../types";
+import { MealPlan, User } from "../types";
 
 export class NotificationService {
   static async requestPermission(): Promise<boolean> {
@@ -23,28 +23,42 @@ export class NotificationService {
     }
   }
 
-  static checkAndNotify(mealPlan: MealPlan, userName: string) {
+  static checkAndNotify(mealPlan: MealPlan, user: User) {
     const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const dayOfMonth = (now.getDate() - 1) % 30;
+    const currentH = now.getHours();
+    const currentM = now.getMinutes();
+    
+    // Heures par défaut si non définies
+    const lunchPref = user.lunchTime || "12:00";
+    const dinnerPref = user.dinnerTime || "19:00";
 
-    const LUNCH_TIME = { h: 12, m: 0 };
-    const DINNER_TIME = { h: 19, m: 0 };
+    const [lH, lM] = lunchPref.split(':').map(Number);
+    const [dH, dM] = dinnerPref.split(':').map(Number);
 
     let mealType: 'lunch' | 'dinner' | null = null;
 
-    if (hours === LUNCH_TIME.h && minutes === LUNCH_TIME.m) mealType = 'lunch';
-    if (hours === DINNER_TIME.h && minutes === DINNER_TIME.m) mealType = 'dinner';
+    if (currentH === lH && currentM === lM) mealType = 'lunch';
+    else if (currentH === dH && currentM === dM) mealType = 'dinner';
 
-    if (mealType && mealPlan.days[dayOfMonth]) {
-      const recipeId = mealPlan.days[dayOfMonth][mealType];
-      const recipe = mealPlan.recipes.find(r => r.id === recipeId);
-      
-      if (recipe) {
-        const title = mealType === 'lunch' ? "🍱 C'est l'heure du déjeuner !" : "🌙 C'est l'heure du dîner !";
-        const body = `Bonjour ${userName}, votre repas prévu est : ${recipe.name}. Bon appétit !`;
-        this.send(title, body);
+    if (mealType) {
+      // On calcule le jour du programme (index 0-29)
+      const startDate = mealPlan.startDate ? new Date(mealPlan.startDate) : new Date();
+      startDate.setHours(0,0,0,0);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const diffDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const dayIndex = diffDays % 30;
+
+      const dayData = mealPlan.days[dayIndex];
+      if (dayData) {
+        const recipeId = mealType === 'lunch' ? dayData.lunch : dayData.dinner;
+        const recipe = mealPlan.recipes.find(r => r.id === recipeId);
+        
+        if (recipe) {
+          const title = mealType === 'lunch' ? "🍱 C'est l'heure de votre déjeuner !" : "🌙 C'est l'heure de votre dîner !";
+          const body = `Bonjour ${user.name.split(' ')[0]}, au menu : ${recipe.name}. Bon appétit !`;
+          this.send(title, body);
+        }
       }
     }
   }

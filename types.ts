@@ -63,9 +63,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Ajouté pour la gestion famille locale
-  picture?: string; // Ajouté pour Google
-  googleId?: string; // Ajouté pour Google
+  password?: string;
+  picture?: string;
+  googleId?: string;
   role: 'admin' | 'user';
   status: 'authorized' | 'pending';
   isAuthenticated: boolean;
@@ -81,6 +81,9 @@ export interface User {
   age?: number;
   gender?: 'man' | 'woman';
   baseActivityLevel?: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+  // Nouvelles préférences de notifications
+  lunchTime?: string; // format "HH:mm"
+  dinnerTime?: string; // format "HH:mm"
 }
 
 export type Tab = 'daily' | 'assistant' | 'calendar' | 'shopping' | 'recipes' | 'sport' | 'admin';
