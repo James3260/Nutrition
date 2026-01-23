@@ -85,11 +85,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       
       setMessages(prev => [...prev, assistantMsg]);
 
-      // Si l'IA signale qu'on est prêt à générer et que l'utilisateur a déjà validé
-      if (res.readyToGenerate) {
-        // Optionnel : On peut laisser l'utilisateur cliquer sur un bouton dans le concept
-      }
-
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: "Erreur de connexion avec Crystal AI." }]);
     } finally {
@@ -98,7 +93,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white/70 backdrop-blur-3xl rounded-[2rem] sm:rounded-[3rem] shadow-premium border border-white/80 overflow-hidden relative min-h-[500px]">
+    <div className="flex-1 flex flex-col bg-white/70 backdrop-blur-3xl rounded-[2rem] sm:rounded-[3rem] shadow-premium border border-white/80 overflow-hidden relative h-full">
       <div className="bg-white/40 border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10 shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">🤖</div>
@@ -145,7 +140,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                   disabled={isLoading}
                   className="w-full py-4 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 disabled:opacity-50"
                 >
-                  {isLoading ? "Génération en cours..." : "Valider & Générer le Plan"}
+                  {isLoading ? "Génération..." : "Valider & Générer"}
                 </button>
               </div>
             )}
@@ -155,22 +150,22 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
           <div className="flex items-center gap-2 text-slate-300">
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-            <span className="text-[8px] font-black uppercase tracking-widest ml-2">Analyse du coach...</span>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="h-4" />
       </div>
 
-      <div className="p-4 sm:p-6 bg-white/40 border-t border-slate-50 shrink-0">
+      {/* Input area avec padding additionnel pour mobile (barre flottante) */}
+      <div className="p-4 sm:p-6 pb-12 sm:pb-8 bg-white/40 border-t border-slate-50 shrink-0 lg:pb-6">
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
           <input 
             type="text" 
             value={input} 
             onChange={(e) => setInput(e.target.value)} 
             placeholder="Répondez au coach ici..."
-            className="flex-1 px-6 py-4 bg-white rounded-2xl border-2 border-slate-100 focus:border-emerald-500/40 outline-none text-sm transition-all shadow-sm"
+            className="flex-1 px-6 py-4 bg-white rounded-2xl border-2 border-slate-100 focus:border-emerald-500/40 outline-none text-sm transition-all shadow-sm min-w-0"
           />
-          <button type="submit" disabled={isLoading || !input.trim()} className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:bg-emerald-600 disabled:opacity-20 transition-all shadow-lg">
+          <button type="submit" disabled={isLoading || !input.trim()} className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:bg-emerald-600 disabled:opacity-20 transition-all shadow-lg shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 12h14M12 5l7 7-7 7" /></svg>
           </button>
         </form>

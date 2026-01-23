@@ -158,9 +158,18 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 min-w-0 overflow-y-auto no-scrollbar relative">
-        {/* pb-40 sur mobile pour garantir que le contenu dépasse largement la barre de navigation flottante */}
-        <div className="p-4 sm:p-6 lg:p-12 pb-40 lg:pb-12 max-w-7xl mx-auto">
-          {activeTab === 'assistant' && <div className="h-[calc(100vh-250px)] lg:h-[750px]"><Assistant setMealPlan={setMealPlan} user={user} onUpdateUser={setUser} messages={chatMessages} setMessages={setChatMessages} /></div>}
+        <div className="p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto">
+          {activeTab === 'assistant' && (
+            <div className="h-[calc(100dvh-180px)] lg:h-[750px]">
+              <Assistant 
+                setMealPlan={setMealPlan} 
+                user={user} 
+                onUpdateUser={setUser} 
+                messages={chatMessages} 
+                setMessages={setChatMessages} 
+              />
+            </div>
+          )}
           {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
           {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
           {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={setUser} />}
