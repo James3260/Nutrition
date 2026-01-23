@@ -9,6 +9,8 @@ interface RecipeListProps {
 
 const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [isCookingMode, setIsCookingMode] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
 
   if (!mealPlan) {
     return (
@@ -23,8 +25,96 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
   const recipes = mealPlan.recipes;
   const selectedRecipe = recipes.find(r => r.id === selectedRecipeId);
 
+  const startCooking = () => {
+    setIsCookingMode(true);
+    setCurrentStep(0);
+  };
+
+  const nextStep = () => {
+    if (selectedRecipe && currentStep < selectedRecipe.steps.length - 1) {
+      setCurrentStep(c => c + 1);
+    } else {
+      setIsCookingMode(false); // Fin
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) setCurrentStep(c => c - 1);
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 animate-in fade-in duration-500 pb-10">
+      
+      {/* Mode Cuisine Immersive Overlay */}
+      {isCookingMode && selectedRecipe && (
+        <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col animate-in zoom-in-95 duration-300">
+          {/* Progress Bar */}
+          <div className="w-full h-2 bg-slate-800">
+            <div 
+              className="h-full bg-emerald-500 transition-all duration-500 ease-out" 
+              style={{ width: `${((currentStep + 1) / selectedRecipe.steps.length) * 100}%` }}
+            ></div>
+          </div>
+
+          {/* Header */}
+          <div className="px-6 py-6 flex justify-between items-center text-white shrink-0">
+            <div>
+              <h2 className="text-lg font-black tracking-tight">{selectedRecipe.name}</h2>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                Étape {currentStep + 1} sur {selectedRecipe.steps.length}
+              </p>
+            </div>
+            <button 
+              onClick={() => setIsCookingMode(false)}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 max-w-4xl mx-auto w-full">
+            <div className="space-y-8">
+               <span className="inline-block px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-black uppercase tracking-widest mb-4">
+                 Action
+               </span>
+               <p className="text-2xl sm:text-4xl md:text-5xl font-bold text-white leading-tight">
+                 {selectedRecipe.steps[currentStep]}
+               </p>
+               
+               {/* Ingredients helper for current step (mockup logic) */}
+               <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mb-3 font-bold">Ingrédients Rappel</p>
+                 <div className="flex flex-wrap gap-2">
+                   {selectedRecipe.ingredients.map((ing, i) => (
+                     <span key={i} className={`text-xs px-3 py-1.5 rounded-lg border ${selectedRecipe.steps[currentStep].toLowerCase().includes(ing.item.toLowerCase().split(' ')[0]) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-transparent text-slate-500 border-slate-700'}`}>
+                       {ing.amount} {ing.item}
+                     </span>
+                   ))}
+                 </div>
+               </div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="p-6 sm:p-10 bg-slate-800/50 backdrop-blur-md border-t border-white/5 flex gap-4 shrink-0">
+            <button 
+              onClick={prevStep}
+              disabled={currentStep === 0}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center disabled:opacity-20 transition-all"
+            >
+              ←
+            </button>
+            <button 
+              onClick={nextStep}
+              className="flex-1 h-16 sm:h-20 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-black text-lg sm:text-xl uppercase tracking-widest shadow-xl shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-3"
+            >
+              {currentStep === selectedRecipe.steps.length - 1 ? 'Terminer ! 🎉' : 'Étape Suivante →'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar List - Horizontale sur mobile, Verticale sur Desktop */}
       <div className="lg:col-span-4 space-y-4 sm:space-y-6">
         <div className="bg-slate-900 p-6 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] text-white shadow-xl">
@@ -60,7 +150,18 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
       {/* Detail View */}
       <div className="lg:col-span-8">
         {selectedRecipe ? (
-          <div className="bg-white rounded-[2rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden min-h-[500px] sm:min-h-[700px] animate-in slide-in-from-right-10 duration-500">
+          <div className="bg-white rounded-[2rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden min-h-[500px] sm:min-h-[700px] animate-in slide-in-from-right-10 duration-500 relative">
+            
+            {/* Start Cooking Floating Button (Mobile friendly) */}
+            <div className="absolute top-6 right-6 z-20">
+               <button 
+                 onClick={startCooking}
+                 className="bg-white/20 backdrop-blur-md hover:bg-white text-white hover:text-emerald-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-white/40 shadow-xl transition-all flex items-center gap-2"
+               >
+                 <span>👨‍🍳</span> Cuisiner
+               </button>
+            </div>
+
             <div className="min-h-[160px] sm:h-60 bg-gradient-to-br from-emerald-500 to-teal-700 p-6 sm:p-10 flex items-end relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
               <div className="relative z-10 w-full">
@@ -68,7 +169,7 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
                   <span className="bg-white/20 backdrop-blur-md text-white text-[7px] sm:text-[9px] font-black px-2 sm:px-3 py-1 sm:py-1.5 rounded-full uppercase tracking-widest border border-white/30">Ratio Perte de Poids</span>
                   <span className="text-white/80 font-bold text-[8px] sm:text-xs">{selectedRecipe.calories} kcal par portion</span>
                 </div>
-                <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white leading-tight drop-shadow-sm">{selectedRecipe.name}</h1>
+                <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white leading-tight drop-shadow-sm w-[80%]">{selectedRecipe.name}</h1>
               </div>
             </div>
             
@@ -112,6 +213,10 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
                       </div>
                     ))}
                   </div>
+                  
+                  <button onClick={startCooking} className="w-full py-4 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all flex items-center justify-center gap-2">
+                     <span>🔥</span> Lancer le mode Cuisine
+                  </button>
                 </div>
               </div>
             </div>
