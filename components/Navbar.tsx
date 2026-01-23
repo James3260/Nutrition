@@ -73,8 +73,8 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
       </nav>
 
-      {/* Mobile Top Header */}
-      <header className="lg:hidden w-full h-16 bg-white/60 backdrop-blur-xl border-b border-white/80 px-6 flex items-center justify-between sticky top-0 z-50 shrink-0">
+      {/* Mobile Top Header - FIXED POSITION */}
+      <header className="lg:hidden w-full h-16 bg-white/80 backdrop-blur-xl border-b border-white/80 px-6 flex items-center justify-between fixed top-0 left-0 right-0 z-[60] shadow-sm">
         <div className="flex items-center gap-3">
            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-black text-xs">N</div>
            <span className="font-black text-[10px] tracking-widest text-slate-900 uppercase">NutriTrack</span>
@@ -85,7 +85,7 @@ const Navbar: React.FC<NavbarProps> = ({
       </header>
 
       {/* Mobile Bottom Navigation - Floating Pill avec support Safe Area */}
-      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/80 backdrop-blur-2xl border border-white/60 rounded-full shadow-[0_12px_40px_-12px_rgba(0,0,0,0.15)] flex items-center justify-around z-50 px-4 mb-[env(safe-area-inset-bottom)]">
+      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/90 backdrop-blur-2xl border border-white/60 rounded-full shadow-[0_12px_40px_-12px_rgba(0,0,0,0.15)] flex items-center justify-around z-[60] px-4 mb-[env(safe-area-inset-bottom)]">
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}

@@ -157,10 +157,16 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      <main className="flex-1 min-w-0 overflow-y-auto no-scrollbar relative">
-        <div className="p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto">
+      {/* 
+         Structure de scroll revue : 
+         - paddingTop (pt-16) pour compenser le header fixe sur mobile.
+         - Si Assistant : overflow-hidden sur main pour laisser Assistant gérer le scroll interne.
+         - Sinon : overflow-y-auto sur main pour le scroll global.
+      */}
+      <main className={`flex-1 min-w-0 relative pt-16 lg:pt-0 ${activeTab === 'assistant' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto no-scrollbar'}`}>
+        <div className={`mx-auto w-full ${activeTab === 'assistant' ? 'h-full p-4 sm:p-6 lg:p-12 max-w-7xl' : 'p-4 sm:p-6 lg:p-12 max-w-7xl'}`}>
           {activeTab === 'assistant' && (
-            <div className="h-[calc(100dvh-180px)] lg:h-[750px]">
+            <div className="h-full">
               <Assistant 
                 setMealPlan={setMealPlan} 
                 user={user} 

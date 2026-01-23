@@ -26,11 +26,9 @@ interface AssistantProps {
 const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, messages, setMessages }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLive, setIsLive] = useState(false);
   const [lastExtractedContext, setLastExtractedContext] = useState<any>({});
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const liveSessionRef = useRef<any>(null);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
@@ -62,12 +60,10 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     try {
       const res = await chatWithAI(userMsg, user, messages);
       
-      // Stockage du contexte pour la génération finale
       if (res.extractedInfo) {
         const newContext = { ...lastExtractedContext, ...res.extractedInfo };
         setLastExtractedContext(newContext);
         
-        // Mise à jour temps réel du profil si possible
         const updatedUser = { ...user };
         if (res.extractedInfo.weight) updatedUser.weightHistory = [...(user.weightHistory || []), { date: new Date().toISOString(), weight: res.extractedInfo.weight }];
         if (res.extractedInfo.height) updatedUser.height = res.extractedInfo.height;
@@ -93,7 +89,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white/70 backdrop-blur-3xl rounded-[2rem] sm:rounded-[3rem] shadow-premium border border-white/80 overflow-hidden relative h-full">
+    <div className="flex flex-col bg-white/70 backdrop-blur-3xl rounded-[2rem] sm:rounded-[3rem] shadow-premium border border-white/80 overflow-hidden relative h-full">
       <div className="bg-white/40 border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10 shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">🤖</div>
@@ -104,7 +100,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 overscroll-contain">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-20">
             <div className="text-5xl mb-4">✨</div>
@@ -155,7 +151,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         <div ref={messagesEndRef} className="h-4" />
       </div>
 
-      <div className="p-4 sm:p-6 pb-12 sm:pb-8 bg-white/40 border-t border-slate-50 shrink-0 lg:pb-6">
+      <div className="p-4 sm:p-6 pb-24 lg:pb-6 bg-white/40 border-t border-slate-50 shrink-0">
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
           <input 
             type="text" 
