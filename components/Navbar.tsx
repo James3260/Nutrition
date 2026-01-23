@@ -84,16 +84,16 @@ const Navbar: React.FC<NavbarProps> = ({
         </button>
       </header>
 
-      {/* Mobile Bottom Navigation - Floating Pill */}
-      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/70 backdrop-blur-2xl border border-white/80 rounded-full shadow-premium flex items-center justify-around z-50 px-4">
+      {/* Mobile Bottom Navigation - Floating Pill avec support Safe Area */}
+      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/80 backdrop-blur-2xl border border-white/60 rounded-full shadow-[0_12px_40px_-12px_rgba(0,0,0,0.15)] flex items-center justify-around z-50 px-4 mb-[env(safe-area-inset-bottom)]">
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-col items-center justify-center w-12 h-12 transition-all ${activeTab === tab.id ? 'text-emerald-600' : 'text-slate-300 opacity-60'}`}
+            className={`flex flex-col items-center justify-center w-12 h-12 transition-all duration-300 ${activeTab === tab.id ? 'text-emerald-600' : 'text-slate-300 opacity-60'}`}
           >
-            <span className={`text-2xl transition-all ${activeTab === tab.id ? 'scale-125 -translate-y-1' : ''}`}>{tab.icon}</span>
-            {activeTab === tab.id && <div className="absolute bottom-2 w-1 h-1 bg-emerald-500 rounded-full"></div>}
+            <span className={`text-2xl transition-all duration-300 ${activeTab === tab.id ? 'scale-125 -translate-y-1' : ''}`}>{tab.icon}</span>
+            {activeTab === tab.id && <div className="absolute bottom-2 w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>}
           </button>
         ))}
       </nav>

@@ -69,7 +69,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
   };
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">Bonjour, {user.name.split(' ')[0]} 👋</h1>
@@ -95,7 +95,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
         </div>
       )}
 
-      {/* Stats Grid - 2 cols on mobile/tablet, 4 on large screens */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {[
           { label: 'Ingéré', val: caloriesEaten, unit: 'kcal', icon: '🍽️', color: 'text-emerald-500', bg: 'bg-emerald-50' },

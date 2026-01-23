@@ -157,19 +157,16 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      {/* Zone de contenu principal : flex-1 prend tout l'espace restant après le header sur mobile */}
       <main className="flex-1 min-w-0 overflow-y-auto no-scrollbar relative">
-        {/* pb-28 pour laisser de l'espace pour la nav mobile flottante */}
-        <div className="p-4 sm:p-6 lg:p-12 pb-28 lg:pb-12 max-w-7xl mx-auto h-full">
-           <div className="h-full flex flex-col">
-            {activeTab === 'assistant' && <Assistant setMealPlan={setMealPlan} user={user} onUpdateUser={setUser} messages={chatMessages} setMessages={setChatMessages} />}
-            {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
-            {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
-            {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={setUser} />}
-            {activeTab === 'shopping' && <ShoppingList mealPlan={mealPlan} />}
-            {activeTab === 'recipes' && <RecipeList mealPlan={mealPlan} user={user} />}
-            {activeTab === 'admin' && user.role === 'admin' && <AdminPanel users={[user]} onUpdateUser={setUser} onCreateUser={() => {}} onDeleteUser={() => {}} isCloudConfigured={true} historyLogs={historyLogs} onManualImport={() => {}} allAppData={{}} onRefreshBranding={refreshAppBranding} />}
-           </div>
+        {/* pb-40 sur mobile pour garantir que le contenu dépasse largement la barre de navigation flottante */}
+        <div className="p-4 sm:p-6 lg:p-12 pb-40 lg:pb-12 max-w-7xl mx-auto">
+          {activeTab === 'assistant' && <div className="h-[calc(100vh-250px)] lg:h-[750px]"><Assistant setMealPlan={setMealPlan} user={user} onUpdateUser={setUser} messages={chatMessages} setMessages={setChatMessages} /></div>}
+          {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
+          {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
+          {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={setUser} />}
+          {activeTab === 'shopping' && <ShoppingList mealPlan={mealPlan} />}
+          {activeTab === 'recipes' && <RecipeList mealPlan={mealPlan} user={user} />}
+          {activeTab === 'admin' && user.role === 'admin' && <AdminPanel users={[user]} onUpdateUser={setUser} onCreateUser={() => {}} onDeleteUser={() => {}} isCloudConfigured={true} historyLogs={historyLogs} onManualImport={() => {}} allAppData={{}} onRefreshBranding={refreshAppBranding} />}
         </div>
       </main>
     </div>
