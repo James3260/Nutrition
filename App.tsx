@@ -146,7 +146,7 @@ const App: React.FC = () => {
   if (!user || !user.isAuthenticated) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -157,10 +157,11 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      {/* Zone de contenu principal - Gestion du scroll ici et non dans les composants */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto no-scrollbar pb-24 lg:pb-0 relative">
-        <div className="w-full h-full p-4 sm:p-6 lg:p-8 xl:p-12">
-          <div className="max-w-7xl mx-auto h-full flex flex-col">
+      {/* Zone de contenu principal : flex-1 prend tout l'espace restant après le header sur mobile */}
+      <main className="flex-1 min-w-0 overflow-y-auto no-scrollbar relative">
+        {/* pb-28 pour laisser de l'espace pour la nav mobile flottante */}
+        <div className="p-4 sm:p-6 lg:p-12 pb-28 lg:pb-12 max-w-7xl mx-auto h-full">
+           <div className="h-full flex flex-col">
             {activeTab === 'assistant' && <Assistant setMealPlan={setMealPlan} user={user} onUpdateUser={setUser} messages={chatMessages} setMessages={setChatMessages} />}
             {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
             {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
@@ -168,7 +169,7 @@ const App: React.FC = () => {
             {activeTab === 'shopping' && <ShoppingList mealPlan={mealPlan} />}
             {activeTab === 'recipes' && <RecipeList mealPlan={mealPlan} user={user} />}
             {activeTab === 'admin' && user.role === 'admin' && <AdminPanel users={[user]} onUpdateUser={setUser} onCreateUser={() => {}} onDeleteUser={() => {}} isCloudConfigured={true} historyLogs={historyLogs} onManualImport={() => {}} allAppData={{}} onRefreshBranding={refreshAppBranding} />}
-          </div>
+           </div>
         </div>
       </main>
     </div>

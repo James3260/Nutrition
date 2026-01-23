@@ -156,7 +156,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, messages, setM
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white/70 backdrop-blur-3xl rounded-[2rem] sm:rounded-[3rem] shadow-premium border border-white/80 overflow-hidden relative min-h-0">
+    <div className="flex-1 flex flex-col bg-white/70 backdrop-blur-3xl rounded-[2rem] sm:rounded-[3rem] shadow-premium border border-white/80 overflow-hidden relative min-h-[500px] sm:min-h-0">
       <div className="bg-white/40 border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10 shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">🤖</div>
