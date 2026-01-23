@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { MealPlan, User } from "../types";
 
 const MEAL_PLAN_SCHEMA = {
@@ -80,12 +80,37 @@ const CHAT_EXTRACTION_SCHEMA = {
   required: ["reply"]
 };
 
-export const chatWithAI = async (message: string, user: User, chatHistory: any[]): Promise<any> => {
-  // Vérification de sécurité pour aider au débogage
+// Fonction utilitaire pour le TTS (Text-to-Speech)
+export const generateSpeech = async (text: string): Promise<string | null> => {
+  if (!process.env.API_KEY) return null;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Voix douce et naturelle
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    return base64Audio || null;
+  } catch (error) {
+    console.warn("TTS Error:", error);
+    return null;
+  }
+};
+
+export const chatWithAI = async (input: string | { audioData: string, mimeType: string }, user: User, chatHistory: any[]): Promise<any> => {
   if (!process.env.API_KEY) {
-    console.error("API_KEY manquante");
     return { 
-      reply: "⚠️ Configuration requise : La clé API Google (API_KEY) est absente. Veuillez l'ajouter dans les variables d'environnement de votre projet Vercel." 
+      reply: "⚠️ Configuration requise : Clé API manquante." 
     };
   }
 
@@ -94,14 +119,11 @@ export const chatWithAI = async (message: string, user: User, chatHistory: any[]
   const systemInstruction = `Tu es l'Expert NutriTrack Crystal, le coach nutritionnel le plus avancé.
   Ta mission : Créer un plan de 30 jours 100% personnalisé pour la perte de poids.
   
-  PROTOCOLE OBLIGATOIRE :
-  1. ANALYSE PHYSIQUE : Si manquant, demande : Poids, Taille, Âge, Sexe. (Crucial pour le BMR).
-  2. PRÉFÉRENCES : Demande les goûts, allergies et ce qu'il déteste.
-  3. LOGISTIQUE : Demande la date de début souhaitée.
-  4. CONCEPT : Une fois les infos reçues, propose un "Concept de Plan" et demande validation.
-  5. GÉNÉRATION : Ne déclenche 'readyToGenerate' que si l'utilisateur valide explicitement.
-
-  TON TON : Professionnel, bienveillant, expert, concis (style SMS).
+  Ton style :
+  - Si on te parle, sois chaleureux et direct.
+  - Réponses courtes (style messagerie).
+  - Collecte les infos (Poids, Taille, Age, Sexe, Objectif) au fil de la conversation.
+  - Une fois tout collecté, propose un concept.
   
   DONNÉES UTILISATEUR : ${JSON.stringify({
     name: user.name,
@@ -111,21 +133,33 @@ export const chatWithAI = async (message: string, user: User, chatHistory: any[]
     height: user.height
   })}`;
 
-  // Conversion de l'historique pour le SDK (mapping 'assistant' -> 'model')
+  // Mapping de l'historique
   const historyContents = chatHistory.map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }]
+    parts: [{ text: msg.content }] // On garde l'historique en texte pour économiser des tokens
   }));
 
-  // Ajout du message actuel
+  // Préparation du message actuel (Texte OU Audio)
+  let currentPart;
+  if (typeof input === 'string') {
+    currentPart = { text: input };
+  } else {
+    currentPart = {
+      inlineData: {
+        mimeType: input.mimeType,
+        data: input.audioData
+      }
+    };
+  }
+
   const contents = [
     ...historyContents,
-    { role: 'user', parts: [{ text: message }] }
+    { role: 'user', parts: [currentPart] }
   ];
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash-preview', // Supporte l'audio en entrée mieux que le 3-flash pour l'instant
       contents: contents,
       config: {
         systemInstruction,
@@ -140,9 +174,8 @@ export const chatWithAI = async (message: string, user: User, chatHistory: any[]
 
   } catch (error) {
     console.error("Chat error:", error);
-    // Fallback gracieux en cas d'erreur technique
     return { 
-      reply: "Désolé, j'ai eu un petit vertige numérique. Pouvez-vous reformuler ?" 
+      reply: "Désolé, je n'ai pas bien entendu. Pouvez-vous répéter ?" 
     };
   }
 };
@@ -157,14 +190,13 @@ export const generateMealPlan = async (userContext: any, user: User): Promise<Me
   Contexte additionnel : ${JSON.stringify(userContext)}
   
   RÈGLES STRICTES :
-  1. Calcule le BMR et ajuste chaque grammage d'ingrédient pour créer un déficit calorique sain (env -300 à -500 kcal).
-  2. Chaque recette doit avoir des quantités en GRAMMES (ex: 125g de poulet, 60g de riz cru).
-  3. Le plan doit durer exactement 30 jours.
-  4. Respecte les exclusions alimentaires mentionnées.`;
+  1. Calcule le BMR et ajuste chaque grammage.
+  2. Chaque recette doit avoir des quantités en GRAMMES.
+  3. Le plan doit durer exactement 30 jours.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Modèle plus puissant pour la génération complexe
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
