@@ -48,15 +48,6 @@ const App: React.FC = () => {
     setHistoryLogs(prev => [newEvent, ...prev].slice(0, 50));
   }, [user]);
 
-  useEffect(() => {
-    if (user && mealPlan && Notification.permission === "granted") {
-      const interval = setInterval(() => {
-        NotificationService.checkAndNotify(mealPlan, user);
-      }, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [user, mealPlan]);
-
   const refreshAppBranding = useCallback(async () => {
     try {
       const icon = await IconService.generateAppIcon();
@@ -70,7 +61,6 @@ const App: React.FC = () => {
 
   const syncWithCloud = useCallback(async (force = false) => {
     if (!CloudSyncService.isConfigured()) return;
-    
     setCloudStatus('syncing');
     try {
       const data = await CloudSyncService.pullData();
@@ -78,11 +68,7 @@ const App: React.FC = () => {
         if (data.mealPlan) setMealPlan(data.mealPlan);
         if (data.chatMessages) setChatMessages(data.chatMessages);
         if (data.historyLogs) setHistoryLogs(data.historyLogs);
-        
-        if (data.userData && user) {
-           setUser(prev => ({ ...prev!, ...data.userData }));
-        }
-
+        if (data.userData && user) setUser(prev => ({ ...prev!, ...data.userData }));
         lastSyncRef.current = data._last_sync || Date.now();
         setCloudStatus('synced');
       } else {
@@ -95,30 +81,10 @@ const App: React.FC = () => {
 
   const pushToCloud = useCallback(async () => {
     if (!CloudSyncService.isConfigured() || isSyncing) return;
-    
     setIsSyncing(true);
     setCloudStatus('syncing');
     try {
-      const payload = { 
-        chatMessages, 
-        mealPlan, 
-        historyLogs,
-        userData: user ? {
-          exclusions: user.exclusions,
-          workouts: user.workouts,
-          weightHistory: user.weightHistory,
-          weightGoal: user.weightGoal,
-          hydrationGoal: user.hydrationGoal,
-          hydrationRecords: user.hydrationRecords,
-          eatenMeals: user.eatenMeals,
-          height: user.height,
-          age: user.age,
-          gender: user.gender,
-          baseActivityLevel: user.baseActivityLevel,
-          lunchTime: user.lunchTime,
-          dinnerTime: user.dinnerTime
-        } : null
-      };
+      const payload = { chatMessages, mealPlan, historyLogs, userData: user };
       const success = await CloudSyncService.pushData(payload);
       if (success) {
         lastSyncRef.current = Date.now();
@@ -140,11 +106,7 @@ const App: React.FC = () => {
       const savedPlan = await StorageService.loadData('plan');
       const savedChat = await StorageService.loadData('chat_history');
       const savedIcon = await StorageService.loadData('app_custom_icon');
-      
-      if (savedIcon) {
-        IconService.applyIcon(savedIcon);
-      }
-
+      if (savedIcon) IconService.applyIcon(savedIcon);
       if (savedUser) {
         setUser(savedUser);
         CloudSyncService.setUserId(savedUser.googleId || savedUser.id);
@@ -162,7 +124,6 @@ const App: React.FC = () => {
       StorageService.saveData('current_user', user);
       if (mealPlan) StorageService.saveData('plan', mealPlan);
       if (chatMessages.length > 0) StorageService.saveData('chat_history', chatMessages);
-      
       const timer = setTimeout(() => pushToCloud(), 3000);
       return () => clearTimeout(timer);
     }
@@ -173,25 +134,16 @@ const App: React.FC = () => {
     setUser(u);
     addHistoryEvent("Authentification", `Connecté (${u.name})`, "system");
     await syncWithCloud(true);
-    
-    if (u.role === 'admin') {
-      const currentIcon = await StorageService.loadData('app_custom_icon');
-      if (!currentIcon) {
-        refreshAppBranding();
-      }
-    }
+    if (u.role === 'admin') refreshAppBranding();
   };
 
   if (!isReady) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white text-emerald-500">
-      <div className="w-10 h-10 border-4 border-emerald-50 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
-      <p className="tracking-[0.4em] text-[10px] font-black uppercase text-slate-400">NutriTrack AI</p>
+    <div className="h-screen flex items-center justify-center bg-white text-emerald-500 font-bold">
+      NutriTrack AI...
     </div>
   );
 
-  if (!user || !user.isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!user || !user.isAuthenticated) return <Login onLogin={handleLogin} />;
 
   return (
     <div className="flex h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
@@ -205,28 +157,17 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      <main className="flex-1 flex flex-col min-h-0 relative">
-        <div className="flex-1 overflow-y-auto no-scrollbar p-3 sm:p-6 lg:p-8 xl:p-12 pb-32 lg:pb-12">
-          <div className="max-w-7xl mx-auto h-full w-full">
-            {activeTab === 'assistant' && <Assistant setMealPlan={(p) => { setMealPlan(p); addHistoryEvent("IA", "Nouveau plan généré", "meal"); }} user={user} onUpdateUser={(u) => setUser(u)} messages={chatMessages} setMessages={setChatMessages} />}
-            {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={(u) => setUser(u)} historyLogs={historyLogs} />}
+      {/* Zone de contenu principal - Gestion du scroll ici et non dans les composants */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto no-scrollbar pb-24 lg:pb-0 relative">
+        <div className="w-full h-full p-4 sm:p-6 lg:p-8 xl:p-12">
+          <div className="max-w-7xl mx-auto h-full flex flex-col">
+            {activeTab === 'assistant' && <Assistant setMealPlan={setMealPlan} user={user} onUpdateUser={setUser} messages={chatMessages} setMessages={setChatMessages} />}
+            {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
             {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
-            {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={(u) => setUser(u)} />}
+            {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={setUser} />}
             {activeTab === 'shopping' && <ShoppingList mealPlan={mealPlan} />}
             {activeTab === 'recipes' && <RecipeList mealPlan={mealPlan} user={user} />}
-            {activeTab === 'admin' && user.role === 'admin' && (
-              <AdminPanel 
-                users={[user]} 
-                onUpdateUser={(u) => setUser(u)} 
-                onCreateUser={() => {}} 
-                onDeleteUser={() => {}} 
-                isCloudConfigured={true} 
-                historyLogs={historyLogs} 
-                onManualImport={() => {}} 
-                allAppData={{}} 
-                onRefreshBranding={refreshAppBranding}
-              />
-            )}
+            {activeTab === 'admin' && user.role === 'admin' && <AdminPanel users={[user]} onUpdateUser={setUser} onCreateUser={() => {}} onDeleteUser={() => {}} isCloudConfigured={true} historyLogs={historyLogs} onManualImport={() => {}} allAppData={{}} onRefreshBranding={refreshAppBranding} />}
           </div>
         </div>
       </main>
