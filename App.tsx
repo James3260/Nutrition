@@ -48,17 +48,15 @@ const App: React.FC = () => {
     setHistoryLogs(prev => [newEvent, ...prev].slice(0, 50));
   }, [user]);
 
-  // Vérification des notifications chaque minute
   useEffect(() => {
     if (user && mealPlan && Notification.permission === "granted") {
       const interval = setInterval(() => {
         NotificationService.checkAndNotify(mealPlan, user);
-      }, 60000); // Check every minute
+      }, 60000);
       return () => clearInterval(interval);
     }
   }, [user, mealPlan]);
 
-  // Génération du logo Premium si nécessaire (pour admin)
   const refreshAppBranding = useCallback(async () => {
     try {
       const icon = await IconService.generateAppIcon();
@@ -176,7 +174,6 @@ const App: React.FC = () => {
     addHistoryEvent("Authentification", `Connecté (${u.name})`, "system");
     await syncWithCloud(true);
     
-    // Si c'est l'admin et qu'il n'y a pas encore d'icône personnalisée, on suggère ou génère
     if (u.role === 'admin') {
       const currentIcon = await StorageService.loadData('app_custom_icon');
       if (!currentIcon) {
@@ -209,7 +206,7 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col min-h-0 relative">
-        <div className="flex-1 overflow-y-auto no-scrollbar md:p-8 lg:p-12 p-4 pb-32 md:pb-12">
+        <div className="flex-1 overflow-y-auto no-scrollbar lg:p-8 xl:p-12 p-4 pb-32 lg:pb-12">
           <div className="max-w-7xl mx-auto h-full flex flex-col">
             {activeTab === 'assistant' && <Assistant setMealPlan={(p) => { setMealPlan(p); addHistoryEvent("IA", "Nouveau plan généré", "meal"); }} user={user} onUpdateUser={(u) => setUser(u)} messages={chatMessages} setMessages={setChatMessages} />}
             {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={(u) => setUser(u)} historyLogs={historyLogs} />}
