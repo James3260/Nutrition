@@ -21,10 +21,34 @@ interface ActivityTrackerProps {
   onUpdateUser: (updatedUser: User) => void;
 }
 
+// Configuration des types d'activités et de leurs champs spécifiques
+const ACTIVITY_TYPES: Record<string, { label: string, icon: string, mode: 'cardio' | 'strength' | 'flex', factor: number }> = {
+  RUNNING: { label: 'Course à pied', icon: '🏃‍♂️', mode: 'cardio', factor: 10 },
+  CYCLING: { label: 'Cyclisme', icon: '🚴', mode: 'cardio', factor: 8 },
+  SWIMMING: { label: 'Natation', icon: '🏊', mode: 'cardio', factor: 9 },
+  WALKING: { label: 'Marche', icon: '🚶', mode: 'cardio', factor: 4 },
+  WEIGHTLIFTING: { label: 'Musculation', icon: '🏋️', mode: 'strength', factor: 6 },
+  CROSSFIT: { label: 'Crossfit', icon: '🤸', mode: 'strength', factor: 11 },
+  HIIT: { label: 'HIIT', icon: '⚡', mode: 'cardio', factor: 12 },
+  YOGA: { label: 'Yoga', icon: '🧘', mode: 'flex', factor: 3 },
+  PILATES: { label: 'Pilates', icon: '🩰', mode: 'flex', factor: 4 },
+  TEAM_SPORTS: { label: 'Sport Collectif', icon: '⚽', mode: 'cardio', factor: 8 },
+};
+
 const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser }) => {
-  const [workoutType, setWorkoutType] = useState('Course à pied');
+  // États de base
+  const [selectedActivityKey, setSelectedActivityKey] = useState('RUNNING');
   const [duration, setDuration] = useState(30);
   const [intensity, setIntensity] = useState<'low' | 'medium' | 'high'>('medium');
+  
+  // États détaillés
+  const [distance, setDistance] = useState<number | ''>('');
+  const [elevation, setElevation] = useState<number | ''>('');
+  const [sets, setSets] = useState<number | ''>('');
+  const [reps, setReps] = useState<number | ''>('');
+  const [weightLoad, setWeightLoad] = useState<number | ''>('');
+
+  // États profil
   const [weight, setWeight] = useState(user.weightHistory?.[user.weightHistory.length - 1]?.weight || 70);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempHydrationGoal, setTempHydrationGoal] = useState(user.hydrationGoal || 2000);
@@ -36,10 +60,10 @@ const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser })
   const hydrationRecords = user.hydrationRecords || [];
   const hydrationGoal = user.hydrationGoal || 2000;
   const weightGoal = user.weightGoal || null;
+  const currentActivity = ACTIVITY_TYPES[selectedActivityKey];
 
   const currentWeight = weightHistory.length > 0 ? weightHistory[weightHistory.length - 1].weight : null;
   const heightInMeters = user.height ? user.height / 100 : null;
-
   const todayStr = new Date().toDateString();
 
   const bmr = useMemo(() => {
@@ -148,16 +172,38 @@ const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser })
 
   const addWorkout = (e: React.FormEvent) => {
     e.preventDefault();
-    const calories = Math.round(duration * (intensity === 'high' ? 10 : intensity === 'medium' ? 7 : 4));
+    
+    // Calcul Calories Amélioré
+    const intensityMult = intensity === 'high' ? 1.2 : intensity === 'medium' ? 1.0 : 0.8;
+    let calculatedCalories = Math.round(duration * currentActivity.factor * intensityMult);
+
+    // Bonus calories pour le dénivelé
+    if (typeof elevation === 'number' && elevation > 0) {
+      calculatedCalories += Math.round(elevation * 0.1);
+    }
+    
     const newWorkout: WorkoutSession = {
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString(),
-      type: workoutType,
+      type: currentActivity.label,
       duration,
       intensity,
-      caloriesBurned: calories
+      caloriesBurned: calculatedCalories,
+      distance: typeof distance === 'number' ? distance : undefined,
+      elevation: typeof elevation === 'number' ? elevation : undefined,
+      sets: typeof sets === 'number' ? sets : undefined,
+      reps: typeof reps === 'number' ? reps : undefined,
+      weightLoad: typeof weightLoad === 'number' ? weightLoad : undefined
     };
+    
     onUpdateUser({ ...user, workouts: [newWorkout, ...workouts] });
+    
+    // Reset fields
+    setDistance('');
+    setElevation('');
+    setSets('');
+    setReps('');
+    setWeightLoad('');
   };
 
   const addWeight = (e: React.FormEvent) => {
@@ -208,19 +254,78 @@ const ActivityTracker: React.FC<ActivityTrackerProps> = ({ user, onUpdateUser })
           </form>
         </div>
 
+        {/* Formulaire Sport Avancé */}
         <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100 p-6 sm:p-8">
-          <h2 className="text-base sm:text-lg font-black text-slate-800 mb-6 flex items-center gap-3">🏃 Sport Rapide</h2>
+          <h2 className="text-base sm:text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
+             <span className="text-xl">{currentActivity.icon}</span> Enregistrer Session
+          </h2>
           <form onSubmit={addWorkout} className="space-y-4">
-            <select value={workoutType} onChange={e => setWorkoutType(e.target.value)} className="w-full px-4 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl border-2 border-slate-50 bg-slate-50 font-bold text-xs sm:text-sm outline-none focus:border-emerald-500/20">
-                <option>Course à pied</option><option>Musculation</option><option>Natation</option><option>Vélo</option><option>Yoga</option><option>HIIT</option>
-            </select>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                <input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className="w-full px-4 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none" placeholder="Min" />
-                <select value={intensity} onChange={e => setIntensity(e.target.value as any)} className="w-full px-4 py-3.5 rounded-xl bg-slate-50 font-bold text-xs sm:text-sm outline-none">
-                    <option value="low">Faible</option><option value="medium">Moyenne</option><option value="high">Élevée</option>
-                </select>
+            
+            {/* Sélecteur d'activité */}
+            <div className="relative">
+              <select 
+                value={selectedActivityKey} 
+                onChange={e => setSelectedActivityKey(e.target.value)} 
+                className="w-full px-4 py-4 rounded-xl sm:rounded-2xl border-2 border-slate-50 bg-slate-50 font-bold text-xs sm:text-sm outline-none focus:border-emerald-500/20 appearance-none"
+              >
+                {Object.entries(ACTIVITY_TYPES).map(([key, data]) => (
+                  <option key={key} value={key}>{data.icon} {data.label}</option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">▼</div>
             </div>
-            <button className="w-full bg-emerald-600 text-white py-4 rounded-xl sm:rounded-2xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-emerald-50 active:scale-95">Enregistrer Session</button>
+
+            {/* Champs de base : Durée & Intensité */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="space-y-1">
+                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Durée (min)</label>
+                   <input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className="w-full px-4 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30" placeholder="30" />
+                </div>
+                <div className="space-y-1">
+                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Intensité</label>
+                   <select value={intensity} onChange={e => setIntensity(e.target.value as any)} className="w-full px-4 py-3.5 rounded-xl bg-slate-50 font-bold text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30">
+                       <option value="low">Faible</option><option value="medium">Moyenne</option><option value="high">Élevée</option>
+                   </select>
+                </div>
+            </div>
+
+            {/* Champs Conditionnels : Cardio */}
+            {currentActivity.mode === 'cardio' && (
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 animate-in slide-in-from-top-2">
+                 <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Distance (km)</label>
+                    <input type="number" step="0.01" value={distance} onChange={e => setDistance(e.target.value === '' ? '' : parseFloat(e.target.value))} className="w-full px-4 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30" placeholder="ex: 5.2" />
+                 </div>
+                 {['RUNNING', 'CYCLING', 'WALKING'].includes(selectedActivityKey) && (
+                    <div className="space-y-1">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Dénivelé (m)</label>
+                        <input type="number" value={elevation} onChange={e => setElevation(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-full px-4 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30" placeholder="ex: 150" />
+                    </div>
+                 )}
+              </div>
+            )}
+
+            {/* Champs Conditionnels : Musculation */}
+            {currentActivity.mode === 'strength' && (
+               <div className="grid grid-cols-3 gap-2 sm:gap-3 animate-in slide-in-from-top-2">
+                  <div className="space-y-1">
+                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Séries</label>
+                     <input type="number" value={sets} onChange={e => setSets(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-full px-3 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30" placeholder="4" />
+                  </div>
+                  <div className="space-y-1">
+                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reps</label>
+                     <input type="number" value={reps} onChange={e => setReps(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-full px-3 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30" placeholder="12" />
+                  </div>
+                  <div className="space-y-1">
+                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Charge (kg)</label>
+                     <input type="number" value={weightLoad} onChange={e => setWeightLoad(e.target.value === '' ? '' : parseFloat(e.target.value))} className="w-full px-3 py-3.5 rounded-xl bg-slate-50 font-black text-xs sm:text-sm outline-none border border-transparent focus:border-emerald-500/30" placeholder="60" />
+                  </div>
+               </div>
+            )}
+
+            <button className="w-full bg-emerald-600 text-white py-4 rounded-xl sm:rounded-2xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-emerald-50 active:scale-95 flex items-center justify-center gap-2">
+               <span>💾</span> Enregistrer
+            </button>
           </form>
         </div>
       </div>

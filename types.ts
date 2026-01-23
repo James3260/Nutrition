@@ -31,6 +31,12 @@ export interface WorkoutSession {
   duration: number;
   intensity: 'low' | 'medium' | 'high';
   caloriesBurned: number;
+  // Nouveaux champs détaillés
+  distance?: number;   // km
+  elevation?: number;  // m (dénivelé)
+  sets?: number;       // Séries
+  reps?: number;       // Répétitions
+  weightLoad?: number; // Charge en kg
 }
 
 export interface WeightRecord {

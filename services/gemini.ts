@@ -3,9 +3,6 @@ import { GoogleGenAI, Type, Modality, FunctionDeclaration, Tool } from "@google/
 import { MealPlan, User } from "../types";
 
 // --- DÉFINITION DES OUTILS (TOOLS) ---
-// Au lieu de forcer l'IA à répondre en JSON, on lui donne des "outils" qu'elle peut appeler si besoin.
-// C'est beaucoup plus rapide et naturel.
-
 const updateUserTool: FunctionDeclaration = {
   name: "update_user_profile",
   description: "Enregistre les informations physiques ou les préférences de l'utilisateur détectées dans la conversation.",
@@ -54,7 +51,7 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
+            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Voix douce
           },
         },
       },
@@ -71,14 +68,12 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
 // --- CHAT PRINCIPAL ---
 export const chatWithAI = async (input: string | { audioData: string, mimeType: string }, user: User, chatHistory: any[]): Promise<any> => {
   if (!process.env.API_KEY) {
-    return { reply: "⚠️ Erreur : Clé API manquante dans Vercel." };
+    return { reply: "⚠️ Erreur : Clé API manquante." };
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // OPTIMISATION 1 : Choix du modèle
-  // Texte seul -> Gemini 3 Flash (Plus rapide et intelligent)
-  // Audio -> Gemini 2.5 Flash (Meilleur support multimodal actuel)
+  // Choix du modèle : Audio nécessite gemini-2.5, Texte pur utilise gemini-3 pour la vitesse/intelligence
   const isAudioInput = typeof input !== 'string';
   const modelName = isAudioInput ? 'gemini-2.5-flash-preview' : 'gemini-3-flash-preview';
 
@@ -89,13 +84,12 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   1. Pose UNE question à la fois pour connaître : Poids, Taille, Âge, Sexe, Objectif.
   2. UTILISE L'OUTIL 'update_user_profile' dès qu'une info est donnée.
   3. Quand tu as tout, UTILISE L'OUTIL 'propose_meal_plan_concept'.
-  4. Ne fais pas de JSON dans ta réponse texte. Parle normalement.`;
+  4. Réponds toujours en texte naturel, pas de JSON brut dans le texte.`;
 
-  // OPTIMISATION 2 : Limiter l'historique pour accélérer le traitement
-  // On ne garde que les 15 derniers messages pour éviter de saturer le modèle
-  const limitedHistory = chatHistory.slice(-15).map(msg => ({
+  // On limite l'historique pour éviter de saturer le contexte
+  const limitedHistory = chatHistory.slice(-10).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }]
+    parts: [{ text: msg.content }] // On garde l'historique en texte
   }));
 
   let currentPart;
@@ -121,27 +115,27 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       contents: contents,
       config: {
         systemInstruction,
-        tools: tools, // Utilisation des Tools au lieu de responseSchema
-        temperature: 0.7, // Plus créatif et naturel
+        tools: tools,
+        temperature: 0.7,
       },
     });
 
     // ANALYSE DE LA RÉPONSE
-    // Le modèle peut répondre par du texte ET/OU des appels de fonction
     const result = {
       reply: "",
       extractedInfo: {} as any,
       suggestedConcept: undefined as any
     };
 
-    // 1. Récupérer le texte (réponse naturelle)
+    // 1. Récupérer le texte
     if (response.text) {
       result.reply = response.text;
     }
 
-    // 2. Vérifier les appels d'outils (Function Calls)
-    // FIX: Utilisation de la propriété .functionCalls (sans parenthèses)
-    const functionCalls = response.functionCalls;
+    // 2. Vérifier les appels d'outils (Function Calls) - CORRECTION DE L'ERREUR TYPESCRIPT
+    // response.functionCalls est une propriété (getter), pas une fonction.
+    const functionCalls = response.functionCalls; 
+    
     if (functionCalls && functionCalls.length > 0) {
       for (const call of functionCalls) {
         if (call.name === 'update_user_profile') {
@@ -153,9 +147,13 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       }
     }
 
-    // Si le modèle a juste appelé une fonction sans parler (rare avec Gemini 3), on ajoute un fallback
     if (!result.reply && result.suggestedConcept) {
-      result.reply = "J'ai analysé vos besoins. Voici ce que je vous propose :";
+      result.reply = "J'ai bien analysé vos besoins. Voici le concept que je vous propose :";
+    }
+    
+    // Fallback si vide
+    if (!result.reply && !result.suggestedConcept) {
+        result.reply = "Je vous écoute.";
     }
 
     return result;
@@ -163,18 +161,17 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   } catch (error) {
     console.error("Chat error:", error);
     return { 
-      reply: "Désolé, je suis un peu lent aujourd'hui. Pouvez-vous répéter ?" 
+      reply: "Désolé, je n'ai pas bien compris. Pouvez-vous répéter ?" 
     };
   }
 };
 
-// --- GÉNÉRATION DU PLAN (Reste sur Gemini 3 Pro pour la qualité complexe) ---
+// --- GÉNÉRATION DU PLAN (Reste sur Gemini 3 Pro pour la complexité) ---
 export const generateMealPlan = async (userContext: any, user: User): Promise<MealPlan> => {
   if (!process.env.API_KEY) throw new Error("API Key manquante");
   
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Schéma strict pour le plan final (ici on garde le JSON car la structure est complexe)
   const MEAL_PLAN_SCHEMA = {
     type: Type.OBJECT,
     properties: {
@@ -216,11 +213,11 @@ export const generateMealPlan = async (userContext: any, user: User): Promise<Me
   Objectif: Perte de poids saine.
   Préférences détectées: ${JSON.stringify(userContext)}
   
-  Règles: 30 jours complets, grammages précis en grammes, déficit calorique calculé.`;
+  Règles: 30 jours complets, grammages précis, déficit calorique calculé.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Le modèle Pro est mieux pour générer du gros JSON valide
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
