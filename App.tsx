@@ -206,8 +206,8 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col min-h-0 relative">
-        <div className="flex-1 overflow-y-auto no-scrollbar lg:p-8 xl:p-12 p-4 pb-32 lg:pb-12">
-          <div className="max-w-7xl mx-auto h-full flex flex-col">
+        <div className="flex-1 overflow-y-auto no-scrollbar p-3 sm:p-6 lg:p-8 xl:p-12 pb-32 lg:pb-12">
+          <div className="max-w-7xl mx-auto h-full w-full">
             {activeTab === 'assistant' && <Assistant setMealPlan={(p) => { setMealPlan(p); addHistoryEvent("IA", "Nouveau plan généré", "meal"); }} user={user} onUpdateUser={(u) => setUser(u)} messages={chatMessages} setMessages={setChatMessages} />}
             {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={(u) => setUser(u)} historyLogs={historyLogs} />}
             {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}

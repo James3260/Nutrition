@@ -69,13 +69,13 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
   };
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-24 md:pb-12 px-2 md:px-0">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-10">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Bonjour, {user.name.split(' ')[0]} 👋</h1>
-          <p className="text-slate-400 font-bold text-xs md:text-sm mt-1">Objectif : {user.weightGoal}kg</p>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">Bonjour, {user.name.split(' ')[0]} 👋</h1>
+          <p className="text-slate-400 font-bold text-xs md:text-sm mt-1 uppercase tracking-widest">Objectif : {user.weightGoal}kg</p>
         </div>
-        <div className="flex items-center gap-2 md:gap-3 self-end md:self-center">
+        <div className="flex items-center gap-2 md:gap-3 self-end sm:self-center">
           <button onClick={() => setShowSettings(!showSettings)} className={`p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100 shadow-sm transition-all ${showSettings ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 hover:text-slate-900'}`}>⚙️</button>
           <div className="bg-white px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl border border-slate-100 shadow-sm flex items-center gap-2 md:gap-3">
              <span className="text-xl md:text-2xl">🏆</span>
@@ -85,7 +85,7 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
       </div>
 
       {showSettings && (
-        <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-10 border-2 border-emerald-100 shadow-premium animate-in slide-in-from-top-4 duration-500">
+        <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-5 sm:p-8 md:p-10 border-2 border-emerald-100 shadow-premium animate-in slide-in-from-top-4 duration-500">
            <h3 className="text-lg md:text-xl font-black text-slate-900 mb-6">Préférences Repas</h3>
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-8 mb-6">
               <div className="space-y-2"><label className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Déjeuner</label><input type="time" value={lunchTime} onChange={(e) => setLunchTime(e.target.value)} className="w-full px-4 md:px-6 py-3 md:py-4 bg-slate-50 rounded-xl md:rounded-2xl text-slate-900 font-black text-base md:text-lg outline-none" /></div>
@@ -95,52 +95,53 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
         </div>
       )}
 
+      {/* Stats Grid - 2 cols on mobile/tablet, 4 on large screens */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {[
           { label: 'Ingéré', val: caloriesEaten, unit: 'kcal', icon: '🍽️', color: 'text-emerald-500', bg: 'bg-emerald-50' },
           { label: 'Brûlé', val: caloriesBurned, unit: 'kcal', icon: '🔥', color: 'text-orange-500', bg: 'bg-orange-50' },
           { label: 'Cible', val: totalDailyNeeds, unit: 'kcal', icon: '🎯', color: 'text-blue-500', bg: 'bg-blue-50' },
-          { label: 'Eau', val: hydrationToday, unit: 'ml', icon: '💧', color: 'text-cyan-500', bg: 'bg-cyan-50' }
+          { label: 'EauToday', val: hydrationToday, unit: 'ml', icon: '💧', color: 'text-cyan-500', bg: 'bg-cyan-50' }
         ].map((card, i) => (
-          <div key={i} className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className={`w-10 h-10 md:w-12 md:h-12 ${card.bg} rounded-xl md:rounded-2xl flex items-center justify-center text-lg md:text-xl mb-3 md:mb-4`}>{card.icon}</div>
-            <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{card.label}</p>
-            <p className={`text-lg md:text-2xl font-black ${card.color}`}>{card.val}<span className="text-[8px] md:text-xs font-bold text-slate-300 ml-1">{card.unit}</span></p>
+          <div key={i} className="bg-white p-4 sm:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 ${card.bg} rounded-xl md:rounded-2xl flex items-center justify-center text-lg md:text-xl mb-3 md:mb-4`}>{card.icon}</div>
+            <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">{card.label}</p>
+            <p className={`text-base sm:text-lg md:text-2xl font-black ${card.color} truncate`}>{card.val}<span className="text-[8px] sm:text-xs font-bold text-slate-300 ml-1">{card.unit}</span></p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         <div className="lg:col-span-2 space-y-6 md:space-y-8">
-          <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-10 border border-slate-100 shadow-premium relative overflow-hidden">
-             <div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-lg md:text-xl font-black text-slate-900">Aujourd'hui</h2><span className="text-[9px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full uppercase">Actif</span></div>
+          <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-5 sm:p-8 md:p-10 border border-slate-100 shadow-premium relative overflow-hidden">
+             <div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-lg md:text-xl font-black text-slate-900">Aujourd'hui</h2><span className="text-[9px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest">Actif</span></div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                {['lunch', 'dinner'].map((type) => {
                  const recipeId = currentDayPlan ? (currentDayPlan as any)[type] : null;
                  const recipe = mealPlan?.recipes?.find(r => r.id === recipeId);
                  return (
-                   <div key={type} className="p-4 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all">
-                      <div className="flex items-center gap-3 md:gap-4 mb-4"><div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-sm">{type === 'lunch' ? '🍱' : '🌙'}</div><div className="min-w-0"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase">{type === 'lunch' ? 'Midi' : 'Soir'}</p><h4 className="text-xs md:text-sm font-black text-slate-800 truncate">{recipe?.name || '---'}</h4></div></div>
-                      <button className="w-full py-2 md:py-3 bg-white hover:bg-emerald-500 hover:text-white text-slate-900 rounded-lg md:rounded-xl font-black text-[9px] md:text-[10px] uppercase transition-all shadow-sm">Découvrir</button>
+                   <div key={type} className="p-4 sm:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all flex flex-col justify-between">
+                      <div className="flex items-center gap-3 sm:gap-4 mb-4"><div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-sm shrink-0">{type === 'lunch' ? '🍱' : '🌙'}</div><div className="min-w-0"><p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase">{type === 'lunch' ? 'Midi' : 'Soir'}</p><h4 className="text-xs sm:text-sm font-black text-slate-800 truncate">{recipe?.name || '---'}</h4></div></div>
+                      <button className="w-full py-2.5 sm:py-3 bg-white hover:bg-emerald-500 hover:text-white text-slate-900 rounded-lg md:rounded-xl font-black text-[9px] sm:text-[10px] uppercase transition-all shadow-sm border border-slate-100">Découvrir</button>
                    </div>
                  );
                })}
              </div>
           </div>
-          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[1.5rem] md:rounded-[2.5rem] p-8 md:p-10 text-white shadow-xl shadow-blue-100">
-             <div className="flex justify-between items-center mb-6 md:mb-8"><h3 className="text-lg md:text-xl font-black">Objectif Eau</h3><span className="text-[10px] font-bold opacity-70">{hydrationPercentage}%</span></div>
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[1.5rem] md:rounded-[2.5rem] p-6 sm:p-8 md:p-10 text-white shadow-xl shadow-blue-100">
+             <div className="flex justify-between items-center mb-6 md:mb-8"><h3 className="text-lg md:text-xl font-black">Objectif Eau</h3><span className="text-[10px] font-bold opacity-70 tracking-widest">{hydrationPercentage}%</span></div>
              <div className="h-3 md:h-4 bg-white/20 rounded-full overflow-hidden mb-6 md:mb-8"><div className="h-full bg-white transition-all duration-1000" style={{ width: `${hydrationPercentage}%` }}></div></div>
-             <div className="grid grid-cols-2 gap-3 md:gap-4"><button onClick={() => addWater(250)} className="py-3 md:py-4 bg-white/10 hover:bg-white/20 rounded-xl md:rounded-2xl font-black text-[9px] uppercase">Verre</button><button onClick={() => addWater(500)} className="py-3 md:py-4 bg-white text-blue-600 rounded-xl md:rounded-2xl font-black text-[9px] uppercase shadow-lg">Bouteille</button></div>
+             <div className="grid grid-cols-2 gap-3 md:gap-4"><button onClick={() => addWater(250)} className="py-3 sm:py-4 bg-white/10 hover:bg-white/20 rounded-xl md:rounded-2xl font-black text-[9px] uppercase tracking-widest border border-white/10">Verre</button><button onClick={() => addWater(500)} className="py-3 sm:py-4 bg-white text-blue-600 rounded-xl md:rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg">Bouteille</button></div>
           </div>
         </div>
         <div className="space-y-6 md:space-y-8">
-           <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-8 border border-slate-100 shadow-premium">
+           <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-6 sm:p-8 border border-slate-100 shadow-premium">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Poids Actuel</h3>
-              <div className="text-center py-4 md:py-6"><p className="text-5xl md:text-6xl font-black text-slate-900 leading-none">{weight}<span className="text-lg text-slate-300 ml-1 md:ml-2">kg</span></p><div className="mt-4 inline-flex items-center px-4 py-2 bg-rose-50 text-rose-500 rounded-full font-bold text-[10px] uppercase tracking-wider">🎯 Objectif : {user.weightGoal}kg</div></div>
+              <div className="text-center py-4 md:py-6"><p className="text-4xl sm:text-5xl md:text-6xl font-black text-slate-900 leading-none">{weight}<span className="text-base sm:text-lg text-slate-300 ml-1 md:ml-2">kg</span></p><div className="mt-4 inline-flex items-center px-4 py-2 bg-rose-50 text-rose-500 rounded-full font-bold text-[8px] sm:text-[10px] uppercase tracking-wider">🎯 Objectif : {user.weightGoal}kg</div></div>
            </div>
-           <div className="bg-emerald-500 rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-8 text-white shadow-xl shadow-emerald-100 relative overflow-hidden">
-              <div className="relative z-10"><h4 className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-3 md:mb-4">Coach IA</h4><p className="text-base md:text-lg font-bold leading-tight">"N'oubliez pas vos protéines ce soir pour favoriser la récupération."</p></div>
-              <div className="absolute -right-6 -bottom-6 text-5xl md:text-6xl opacity-20 transform -rotate-12">🤖</div>
+           <div className="bg-emerald-500 rounded-[1.5rem] md:rounded-[2.5rem] p-6 sm:p-8 text-white shadow-xl shadow-emerald-100 relative overflow-hidden group">
+              <div className="relative z-10"><h4 className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-3 md:mb-4">Coach IA</h4><p className="text-sm sm:text-base md:text-lg font-bold leading-tight italic">"N'oubliez pas vos protéines ce soir pour favoriser la récupération musculaire."</p></div>
+              <div className="absolute -right-6 -bottom-6 text-5xl sm:text-6xl opacity-20 transform -rotate-12 group-hover:rotate-0 transition-transform duration-500">🤖</div>
            </div>
         </div>
       </div>
