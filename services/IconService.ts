@@ -9,7 +9,7 @@ declare global {
   }
 
   interface Window {
-    // Removed readonly to match the environment's internal property definition.
+    // Removed readonly modifier to match the platform's global declaration of aistudio and avoid identical modifier errors.
     aistudio: AIStudio;
   }
 }
@@ -49,7 +49,7 @@ export class IconService {
       if (firstCandidate.content && firstCandidate.content.parts) {
         // Find the image part, do not assume it is the first part.
         for (const part of firstCandidate.content.parts) {
-          if (part.inlineData && part.inlineData.data) {
+          if (part.inlineData) {
             const base64EncodeString: string = part.inlineData.data;
             return `data:image/png;base64,${base64EncodeString}`;
           }
@@ -58,6 +58,11 @@ export class IconService {
 
       throw new Error("Aucune donnée d'image trouvée dans la réponse.");
     } catch (error: any) {
+      // If the request fails with an error message containing "Requested entity was not found.", 
+      // reset the key selection state and prompt the user to select a key again via openSelectKey().
+      if (error.message?.includes("Requested entity was not found")) {
+        await window.aistudio.openSelectKey();
+      }
       console.error("Erreur IconService:", error);
       throw error;
     }

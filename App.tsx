@@ -12,7 +12,6 @@ import AdminPanel from './components/AdminPanel';
 import DailyDashboard from './components/DailyDashboard';
 import { StorageService } from './services/StorageService';
 import { CloudSyncService } from './services/CloudSyncService';
-import { BiometricService } from './services/BiometricService';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -21,15 +20,11 @@ interface Message {
   proposedShortList?: string[];
 }
 
-const ADMIN_EMAIL = "nene2080@icloud.com";
-const DEFAULT_ADMIN_PASS = "admin14";
-
 const App: React.FC = () => {
   const [isReady, setIsReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('daily');
+  const [activeTab, setActiveTab] = useState<Tab>('assistant');
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [historyLogs, setHistoryLogs] = useState<HistoryEvent[]>([]);
@@ -60,9 +55,13 @@ const App: React.FC = () => {
       if (data && (force || data._last_sync > lastSyncRef.current)) {
         if (data.mealPlan) setMealPlan(data.mealPlan);
         if (data.chatMessages) setChatMessages(data.chatMessages);
-        if (data.allUsers) setAllUsers(data.allUsers);
         if (data.historyLogs) setHistoryLogs(data.historyLogs);
-        lastSyncRef.current = data._last_sync;
+        
+        if (data.userData && user) {
+           setUser(prev => ({ ...prev!, ...data.userData }));
+        }
+
+        lastSyncRef.current = data._last_sync || Date.now();
         setCloudStatus('synced');
       } else {
         setCloudStatus('synced');
@@ -70,7 +69,7 @@ const App: React.FC = () => {
     } catch (e) {
       setCloudStatus('error');
     }
-  }, []);
+  }, [user]);
 
   const pushToCloud = useCallback(async () => {
     if (!CloudSyncService.isConfigured() || isSyncing) return;
@@ -78,7 +77,24 @@ const App: React.FC = () => {
     setIsSyncing(true);
     setCloudStatus('syncing');
     try {
-      const payload = { allUsers, chatMessages, mealPlan, historyLogs };
+      const payload = { 
+        chatMessages, 
+        mealPlan, 
+        historyLogs,
+        userData: user ? {
+          exclusions: user.exclusions,
+          workouts: user.workouts,
+          weightHistory: user.weightHistory,
+          weightGoal: user.weightGoal,
+          hydrationGoal: user.hydrationGoal,
+          hydrationRecords: user.hydrationRecords,
+          eatenMeals: user.eatenMeals,
+          height: user.height,
+          age: user.age,
+          gender: user.gender,
+          baseActivityLevel: user.baseActivityLevel
+        } : null
+      };
       const success = await CloudSyncService.pushData(payload);
       if (success) {
         lastSyncRef.current = Date.now();
@@ -91,52 +107,21 @@ const App: React.FC = () => {
     } finally {
       setIsSyncing(false);
     }
-  }, [allUsers, chatMessages, mealPlan, historyLogs, isSyncing]);
+  }, [chatMessages, mealPlan, historyLogs, isSyncing, user]);
 
   useEffect(() => {
     const init = async () => {
-      await CloudSyncService.init();
+      CloudSyncService.init();
+      // On charge l'utilisateur local en priorité pour éviter le flash de login
+      const savedUser = await StorageService.loadData('current_user');
+      const savedPlan = await StorageService.loadData('plan');
+      const savedChat = await StorageService.loadData('chat_history');
       
-      const [savedUser, savedUsersList, savedPlan, savedChat, savedLogs] = await Promise.all([
-        StorageService.loadData('current_user'),
-        StorageService.loadData('all_users'),
-        StorageService.loadData('plan'),
-        StorageService.loadData('chat_history'),
-        StorageService.loadData('history_logs')
-      ]);
-
-      if (savedUser) setUser(savedUser);
-      
-      // LOGIQUE DE SÉCURITÉ : On s'assure que l'admin est toujours là
-      const adminUser: User = {
-        id: btoa(ADMIN_EMAIL),
-        name: 'Admin',
-        email: ADMIN_EMAIL,
-        password: DEFAULT_ADMIN_PASS,
-        role: 'admin',
-        status: 'authorized',
-        isAuthenticated: false,
-        exclusions: [],
-        workouts: [],
-        weightHistory: [],
-        hydrationRecords: [],
-        eatenMeals: []
-      };
-
-      let initialUsers: User[] = Array.isArray(savedUsersList) ? savedUsersList : [];
-      
-      // Si l'admin n'est pas dans la liste récupérée, on l'ajoute de force
-      if (!initialUsers.find(u => u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase())) {
-        initialUsers.push(adminUser);
-      }
-      
-      setAllUsers(initialUsers);
-      
-      if (savedPlan) setMealPlan(savedPlan);
-      if (savedChat) setChatMessages(savedChat);
-      if (savedLogs) setHistoryLogs(savedLogs);
-
-      if (CloudSyncService.isConfigured()) {
+      if (savedUser) {
+        setUser(savedUser);
+        CloudSyncService.setUserId(savedUser.googleId || savedUser.id);
+        if (savedPlan) setMealPlan(savedPlan);
+        if (savedChat) setChatMessages(savedChat);
         await syncWithCloud(true);
       }
       setIsReady(true);
@@ -145,85 +130,32 @@ const App: React.FC = () => {
   }, [syncWithCloud]);
 
   useEffect(() => {
-    if (isReady) {
-      if (user) StorageService.saveData('current_user', user);
-      StorageService.saveData('all_users', allUsers);
-      StorageService.saveData('plan', mealPlan);
-      StorageService.saveData('chat_history', chatMessages);
-      StorageService.saveData('history_logs', historyLogs);
+    if (isReady && user) {
+      StorageService.saveData('current_user', user);
+      if (mealPlan) StorageService.saveData('plan', mealPlan);
+      if (chatMessages.length > 0) StorageService.saveData('chat_history', chatMessages);
       
-      if (CloudSyncService.isConfigured()) {
-        const timer = setTimeout(() => pushToCloud(), 5000);
-        return () => clearTimeout(timer);
-      }
+      const timer = setTimeout(() => pushToCloud(), 3000);
+      return () => clearTimeout(timer);
     }
-  }, [allUsers, mealPlan, chatMessages, historyLogs, isReady, pushToCloud, user]);
+  }, [mealPlan, chatMessages, historyLogs, isReady, pushToCloud, user]);
 
   const handleLogin = async (u: User) => {
+    CloudSyncService.setUserId(u.googleId || u.id);
     setUser(u);
-    setAllUsers(prev => {
-      if (!prev.find(au => au.email === u.email)) return [...prev, u];
-      return prev.map(au => au.email === u.email ? u : au);
-    });
-    
-    addHistoryEvent("Authentification", `Connecté en tant que ${u.name}`, "system");
-    
-    if (!u.biometricId && BiometricService.isAvailable()) {
-       const confirmBio = window.confirm("Activer FaceID / TouchID ?");
-       if (confirmBio) {
-          const bioId = await BiometricService.registerBiometrics(u.email);
-          if (bioId) {
-            const updatedUser = { ...u, biometricId: bioId };
-            setUser(updatedUser);
-            addHistoryEvent("Sécurité", "Biométrie activée", "system");
-          }
-       }
-    }
-
-    const vaultId = CloudSyncService.deriveVaultIdFromEmail(u.email);
-    CloudSyncService.setVaultId(vaultId);
+    addHistoryEvent("Authentification", `Connecté (${u.name})`, "system");
     await syncWithCloud(true);
-  };
-
-  const handleCreateUser = (name: string, email: string, password?: string) => {
-    const newUser: User = {
-      id: btoa(email),
-      name,
-      email,
-      password: password || "1234",
-      role: email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user',
-      status: 'authorized',
-      isAuthenticated: false,
-      exclusions: [],
-      workouts: [],
-      weightHistory: [],
-      hydrationRecords: [],
-      eatenMeals: []
-    };
-    setAllUsers(prev => [...prev, newUser]);
-    addHistoryEvent("Admin", `Nouveau membre : ${name}`, "admin");
-  };
-
-  const handleDeleteUser = (userId: string) => {
-    const u = allUsers.find(x => x.id === userId);
-    setAllUsers(prev => prev.filter(au => au.id !== userId));
-    addHistoryEvent("Admin", `Membre supprimé : ${u?.name}`, "admin");
-  };
-
-  const handleUpdateUser = (updatedUser: User) => {
-    setAllUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    if (user?.id === updatedUser.id) setUser(updatedUser);
   };
 
   if (!isReady) return (
     <div className="h-screen flex flex-col items-center justify-center bg-[#0f172a] text-white">
-      <div className="w-10 h-10 border-4 border-white border-t-emerald-500 rounded-full animate-spin mb-4"></div>
-      <p className="tracking-widest text-[10px] font-black uppercase opacity-40">Initialisation...</p>
+      <div className="w-10 h-10 border-4 border-white/10 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+      <p className="tracking-widest text-[9px] font-black uppercase opacity-40">Initialisation...</p>
     </div>
   );
 
   if (!user || !user.isAuthenticated) {
-    return <Login onLogin={handleLogin} allUsers={allUsers} />;
+    return <Login onLogin={handleLogin} />;
   }
 
   return (
@@ -238,38 +170,29 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      <main className="flex-1 container mx-auto px-4 py-4 max-w-6xl flex flex-col min-h-0 overflow-y-auto">
+      <main className="flex-1 container mx-auto px-4 py-4 max-w-6xl flex flex-col min-h-0">
         <div className="flex-1 flex flex-col min-h-0">
-          {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={handleUpdateUser} historyLogs={historyLogs} />}
-          {activeTab === 'assistant' && <Assistant setMealPlan={(p) => { setMealPlan(p); addHistoryEvent("Nutrition", "Plan mis à jour", "meal"); }} user={user} onUpdateUser={handleUpdateUser} messages={chatMessages} setMessages={setChatMessages} />}
+          {activeTab === 'assistant' && <Assistant setMealPlan={(p) => { setMealPlan(p); addHistoryEvent("IA", "Nouveau plan généré", "meal"); }} user={user} onUpdateUser={(u) => setUser(u)} messages={chatMessages} setMessages={setChatMessages} />}
+          {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={(u) => setUser(u)} historyLogs={historyLogs} />}
           {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
-          {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={handleUpdateUser} />}
+          {activeTab === 'sport' && <ActivityTracker user={user} onUpdateUser={(u) => setUser(u)} />}
           {activeTab === 'shopping' && <ShoppingList mealPlan={mealPlan} />}
           {activeTab === 'recipes' && <RecipeList mealPlan={mealPlan} user={user} />}
           {activeTab === 'admin' && user.role === 'admin' && (
-            <AdminPanel 
-              users={allUsers} 
-              onUpdateUser={handleUpdateUser}
-              onCreateUser={handleCreateUser} 
-              onDeleteUser={handleDeleteUser} 
-              isCloudConfigured={CloudSyncService.isConfigured()}
-              historyLogs={historyLogs}
-              onManualImport={() => {}}
-              allAppData={{ allUsers, mealPlan, chatMessages, historyLogs }}
-            />
+            <AdminPanel users={[user]} onUpdateUser={(u) => setUser(u)} onCreateUser={() => {}} onDeleteUser={() => {}} isCloudConfigured={true} historyLogs={historyLogs} onManualImport={() => {}} allAppData={{}} />
           )}
         </div>
       </main>
 
       <footer className="bg-white border-t py-2 px-6 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 shrink-0">
         <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full ${CloudSyncService.isConfigured() ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${CloudSyncService.isConfigured() ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
-            <span>{CloudSyncService.isConfigured() ? 'CLOUD SYNCHRONISÉ' : 'MODE LOCAL'}</span>
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span>CLOUD NUTRITRACK : {CloudSyncService.getUserId()?.substr(0, 8)}...</span>
           </div>
-          <span className="opacity-40">{user.email}</span>
+          <span className="opacity-40">{user.name}</span>
         </div>
-        <div>NUTRITRACK CORE 8.6 • ENFORCED AUTH</div>
+        <div className="hidden md:block">NUTRITRACK 10.0 • GUEST MODE SUPPORTED</div>
       </footer>
     </div>
   );

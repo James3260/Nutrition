@@ -63,7 +63,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string;
+  picture?: string; // Ajouté pour Google
+  googleId?: string; // Ajouté pour Google
   role: 'admin' | 'user';
   status: 'authorized' | 'pending';
   isAuthenticated: boolean;
@@ -71,6 +72,7 @@ export interface User {
   exclusions?: string[];
   workouts?: WorkoutSession[];
   weightHistory?: WeightRecord[];
+  weightGoal?: number;
   hydrationGoal?: number;
   hydrationRecords?: HydrationRecord[];
   eatenMeals?: EatenMealRecord[];

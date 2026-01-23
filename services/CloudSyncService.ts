@@ -1,103 +1,110 @@
 
 /**
- * CloudSyncService v8.1 - Resilience Layer
- * Gère la synchronisation Firebase avec sécurité renforcée.
+ * CloudSyncService v10.0 - Google Persistence Layer
+ * Synchronisation automatique basée sur l'ID unique Google de l'utilisateur.
  */
 export class CloudSyncService {
-  private static DATA_KEY = "nutritrack_vault_id";
-  // REMPLACEZ PAR VOTRE URL FIREBASE (ex: https://votre-projet.firebaseio.com)
+  private static DATA_KEY = "nutritrack_user_id";
   private static FIREBASE_URL = "https://nutritrack-v7-default-rtdb.europe-west1.firebasedatabase.app";
 
-  static async init() {
+  static init() {
+    // Nettoyage des anciens paramètres d'URL si présents
     const params = new URLSearchParams(window.location.search);
-    const vaultId = params.get('vault');
-    if (vaultId) {
-      this.setVaultId(vaultId);
+    if (params.has('vault')) {
+      const vaultId = params.get('vault');
+      if (vaultId) this.setUserId(vaultId);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }
 
-  // Fixed: Added missing ensureVaultExists method for SyncModal.tsx
+  static isConfigured(): boolean {
+    return !!this.getUserId();
+  }
+
+  static getUserId(): string | null {
+    return localStorage.getItem(this.DATA_KEY);
+  }
+
+  static setUserId(id: string) {
+    localStorage.setItem(this.DATA_KEY, id);
+  }
+
+  // Added missing method to return the current vault/user ID.
+  static getVaultId(): string | null {
+    return this.getUserId();
+  }
+
+  // Added missing method to set the current vault/user ID.
+  static setVaultId(id: string) {
+    this.setUserId(id);
+  }
+
+  // Added missing method to ensure a vault ID exists, creating one if necessary.
   static async ensureVaultExists(): Promise<string | null> {
-    let id = this.getVaultId();
+    let id = this.getUserId();
     if (!id) {
-      // Create a unique vault ID if none exists in storage
-      id = `vault_${Math.random().toString(36).substring(2, 10)}`;
-      this.setVaultId(id);
+      id = "nutri_" + Math.random().toString(36).substr(2, 9);
+      this.setUserId(id);
     }
     return id;
   }
 
-  static isUrlValid(): boolean {
-    return !this.FIREBASE_URL.includes("default-rtdb");
-  }
-
+  // Added missing method to generate a sharing link for the current vault.
   static generateMasterLink(): string {
-    const id = this.getVaultId();
+    const id = this.getUserId();
     if (!id) return window.location.origin;
     return `${window.location.origin}?vault=${id}`;
   }
 
-  static deriveVaultIdFromEmail(email: string): string {
-    const sanitized = email.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    return `user_${sanitized}`;
-  }
-
-  static getVaultId(): string | null {
-    return localStorage.getItem(this.DATA_KEY);
-  }
-
-  static setVaultId(id: string) {
-    localStorage.setItem(this.DATA_KEY, id);
-  }
-
-  static isConfigured(): boolean {
-    return !!this.getVaultId() && this.isUrlValid();
+  // Added missing method to export application data to a JSON file.
+  static exportToFile(data: any) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nutritrack_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   static disconnect() {
     localStorage.removeItem(this.DATA_KEY);
   }
 
+  /**
+   * Pousse les données vers le Cloud Firebase
+   */
   static async pushData(data: any): Promise<boolean> {
-    const id = this.getVaultId();
-    if (!id || !this.isUrlValid()) return false;
+    const id = this.getUserId();
+    if (!id) return false;
 
     try {
-      const response = await fetch(`${this.FIREBASE_URL}/${id}.json`, {
+      const response = await fetch(`${this.FIREBASE_URL}/users/${id}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, _last_sync: Date.now() })
       });
       return response.ok;
     } catch (e) {
-      console.warn("Cloud Sync Fail (Silently falling back to local)");
+      console.warn("Cloud Push Fail:", e);
       return false;
     }
   }
 
+  /**
+   * Récupère les données depuis le Cloud Firebase
+   */
   static async pullData(): Promise<any | null> {
-    const id = this.getVaultId();
-    if (!id || !this.isUrlValid()) return null;
+    const id = this.getUserId();
+    if (!id) return null;
 
     try {
-      const response = await fetch(`${this.FIREBASE_URL}/${id}.json`);
+      const response = await fetch(`${this.FIREBASE_URL}/users/${id}.json`);
       if (!response.ok) return null;
       return await response.json();
     } catch (e) {
+      console.warn("Cloud Pull Fail:", e);
       return null;
     }
-  }
-
-  static exportToFile(data: any) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `nutritrack_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 }

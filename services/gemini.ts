@@ -2,9 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MealPlan, User } from "../types";
 
-// Always initialize GoogleGenAI with a named parameter for apiKey
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 const MEAL_PLAN_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -38,7 +35,7 @@ const MEAL_PLAN_SCHEMA = {
                 amount: { type: Type.STRING, description: "EXACT portion in grams tailored to user's body" }
               },
               required: ["item", "amount"]
-          }
+            }
           },
           steps: {
             type: Type.ARRAY,
@@ -73,6 +70,9 @@ const CHAT_EXTRACTION_SCHEMA = {
 };
 
 export const chatWithAI = async (message: string, user: User): Promise<{ reply: string, extractedInfo?: any }> => {
+  // Always initialize GoogleGenAI inside the function to use the most up-to-date API key.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const systemInstruction = `Tu es NutriTrack, un coach nutritionnel expert. 
   Ton but est d'aider l'utilisateur à perdre du poids. 
   
@@ -110,6 +110,9 @@ export const chatWithAI = async (message: string, user: User): Promise<{ reply: 
 };
 
 export const generateMealPlan = async (userPrompt: string, user: User): Promise<MealPlan> => {
+  // Always initialize GoogleGenAI inside the function to use the most up-to-date API key.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const morphoContext = `
     PROFIL PHYSIQUE : ${user.gender === 'man' ? 'Homme' : 'Femme'}, ${user.age} ans, ${user.height}cm, 
     poids actuel ${user.weightHistory?.[user.weightHistory.length - 1]?.weight || '70'}kg, 
