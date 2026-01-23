@@ -24,13 +24,23 @@ interface AssistantProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
-// --- UTILITAIRES AUDIO (Encodage/Décodage PCM) ---
+// --- UTILITAIRES AUDIO OPTIMISÉS ---
 
-function floatTo16BitPCM(output: DataView, offset: number, input: Float32Array) {
-  for (let i = 0; i < input.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, input[i]));
-    output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+// Conversion Float32 vers Int16 avec downsampling simple si nécessaire
+function processAudioInput(inputData: Float32Array, inputSampleRate: number, targetSampleRate: number = 16000) {
+  // Ratio de compression (ex: 48000 / 16000 = 3)
+  const ratio = inputSampleRate / targetSampleRate;
+  const newLength = Math.floor(inputData.length / ratio);
+  const pcmBuffer = new Int16Array(newLength);
+  
+  for (let i = 0; i < newLength; i++) {
+    // On prend un échantillon tous les 'ratio' (méthode nearest neighbor, suffisante pour la voix et très rapide)
+    const offset = Math.floor(i * ratio);
+    const sample = Math.max(-1, Math.min(1, inputData[offset])); // Clamping
+    pcmBuffer[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
   }
+  
+  return pcmBuffer.buffer;
 }
 
 function base64Encode(buffer: ArrayBuffer) {
@@ -59,6 +69,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   // Modes
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
   
   // Chat Textuel Standard
   const [input, setInput] = useState('');
@@ -66,34 +77,71 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // --- LOGIQUE LIVE API ---
-  const [volumeLevel, setVolumeLevel] = useState(0); // Pour la visualisation
+  const [volumeLevel, setVolumeLevel] = useState(0); 
   const audioContextRef = useRef<AudioContext | null>(null);
   const liveSessionRef = useRef<any>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const audioQueueRef = useRef<AudioBufferSourceNode[]>([]);
+  const lastVolumeUpdateRef = useRef<number>(0);
 
-  // Nettoyage à la fermeture
+  // Nettoyage complet à la fermeture du composant
   useEffect(() => {
     return () => {
-      stopLiveSession();
+      cleanupAudio();
     };
   }, []);
+
+  const cleanupAudio = () => {
+    try {
+      if (inputSourceRef.current) inputSourceRef.current.disconnect();
+      if (processorRef.current) processorRef.current.disconnect();
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+      if (liveSessionRef.current) {
+         // Tentative de fermeture propre si l'API le permettait
+      }
+    } catch (e) {
+      console.warn("Erreur cleanup audio:", e);
+    }
+    
+    inputSourceRef.current = null;
+    processorRef.current = null;
+    audioContextRef.current = null;
+    liveSessionRef.current = null;
+    setIsLiveConnected(false);
+  };
 
   const startLiveSession = async () => {
     if (!process.env.API_KEY) {
       alert("Clé API manquante");
       return;
     }
-
+    setLiveError(null);
     setIsLiveMode(true);
     
     try {
-      // 1. Initialiser l'audio
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      // 1. Initialiser l'audio SANS forcer le sampleRate (Correction Crash iOS)
+      // L'iPhone choisira sa fréquence native (souvent 44.1k ou 48k)
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContextClass(); 
       audioContextRef.current = audioCtx;
+
+      // Important pour iOS : Resume context s'il est suspendu (ce qui arrive souvent au démarrage)
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+
       nextStartTimeRef.current = audioCtx.currentTime;
 
       // 2. Connexion Gemini Live
@@ -105,37 +153,39 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: `Tu es Crystal, une coach nutrition d'élite. Tu es empathique, énergique et très compétente.
-          Tu discutes vocalement avec ${user.name}.
-          Objectif: Aider l'utilisateur à atteindre ses objectifs de santé.
-          Style: Conversation naturelle, fluide, comme au téléphone. Réponses courtes et percutantes.`,
+          systemInstruction: `Tu es Crystal, coach nutrition. Conversation orale avec ${user.name}.
+          Réponses très courtes et naturelles.`,
         },
         callbacks: {
           onopen: () => {
             console.log("Gemini Live Connected");
             setIsLiveConnected(true);
 
-            // 3. Configuration du flux Audio Entrant (Micro -> Gemini)
+            // 3. Configuration du flux Audio Entrant
             const source = audioCtx.createMediaStreamSource(stream);
             inputSourceRef.current = source;
             
-            // ScriptProcessor pour capturer le PCM brut (4096 buffer size)
+            // ScriptProcessor (4096 est un bon équilibre stabilité/latence sur mobile)
             const processor = audioCtx.createScriptProcessor(4096, 1, 1);
             processorRef.current = processor;
 
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
-              
-              // Conversion Float32 -> Int16 PCM
-              const pcmBuffer = new ArrayBuffer(inputData.length * 2);
-              const dataView = new DataView(pcmBuffer);
-              floatTo16BitPCM(dataView, 0, inputData);
+              const currentSampleRate = audioCtx.sampleRate;
+
+              // Conversion & Downsampling si nécessaire (ex: 48k -> 16k)
+              const pcmBuffer = processAudioInput(inputData, currentSampleRate, 16000);
               const base64Data = base64Encode(pcmBuffer);
 
-              // Visualisation simple (volume)
-              let sum = 0;
-              for(let i=0; i<inputData.length; i++) sum += Math.abs(inputData[i]);
-              setVolumeLevel(Math.min(100, (sum / inputData.length) * 500));
+              // Visualisation throttled (évite de surcharger le render React)
+              const now = Date.now();
+              if (now - lastVolumeUpdateRef.current > 100) { // Max 10 updates / sec
+                let sum = 0;
+                // On prend un échantillon sur 10 pour le calcul de volume (optimisation perf)
+                for(let i=0; i<inputData.length; i+=10) sum += Math.abs(inputData[i]);
+                setVolumeLevel(Math.min(100, (sum / (inputData.length/10)) * 500));
+                lastVolumeUpdateRef.current = now;
+              }
 
               // Envoi
               sessionPromise.then(session => {
@@ -152,20 +202,20 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             processor.connect(audioCtx.destination);
           },
           onmessage: async (msg: LiveServerMessage) => {
-            // 4. Réception Audio (Gemini -> Haut-parleurs)
             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (audioData && audioContextRef.current) {
               const ctx = audioContextRef.current;
               
-              // Décodage manuel PCM 24kHz (Format de sortie Gemini Live)
+              // Décodage
               const rawBytes = base64Decode(audioData);
               const dataInt16 = new Int16Array(rawBytes.buffer);
               const float32Data = new Float32Array(dataInt16.length);
-              
               for (let i = 0; i < dataInt16.length; i++) {
                 float32Data[i] = dataInt16[i] / 32768.0;
               }
 
+              // Création Buffer : On déclare que ces données sont à 24kHz.
+              // Le contexte (même s'il est à 48kHz) fera le resampling automatiquement à la lecture.
               const buffer = ctx.createBuffer(1, float32Data.length, 24000);
               buffer.copyToChannel(float32Data, 0);
 
@@ -173,31 +223,34 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
               source.buffer = buffer;
               source.connect(ctx.destination);
 
-              // Planification sans trou (Gapless)
+              // Gapless playback logic
               const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current);
               source.start(startTime);
               nextStartTimeRef.current = startTime + buffer.duration;
               
               audioQueueRef.current.push(source);
               source.onended = () => {
+                // Nettoyage mémoire
                 audioQueueRef.current = audioQueueRef.current.filter(s => s !== source);
               };
             }
 
-            // Gestion des interruptions (si l'utilisateur parle par dessus)
             if (msg.serverContent?.interrupted) {
-               audioQueueRef.current.forEach(s => s.stop());
+               audioQueueRef.current.forEach(s => { try{ s.stop(); }catch(e){} });
                audioQueueRef.current = [];
                if (audioContextRef.current) nextStartTimeRef.current = audioContextRef.current.currentTime;
             }
           },
           onclose: () => {
-            console.log("Session Live fermée");
-            stopLiveSession();
+            console.log("Live fermé par le serveur");
+            cleanupAudio();
+            setIsLiveMode(false);
           },
           onerror: (err) => {
             console.error("Erreur Live:", err);
-            stopLiveSession();
+            setLiveError("Connexion interrompue. Réessayez.");
+            cleanupAudio(); // Important pour éviter l'état instable
+            // On reste sur l'écran Live pour afficher l'erreur
           }
         }
       });
@@ -205,37 +258,14 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
     } catch (e) {
       console.error("Impossible de démarrer le live:", e);
-      setIsLiveMode(false);
+      setLiveError("Accès micro refusé ou erreur système.");
+      cleanupAudio();
     }
   };
 
-  const stopLiveSession = () => {
-    setIsLiveConnected(false);
+  const stopLiveAndClose = () => {
+    cleanupAudio();
     setIsLiveMode(false);
-    
-    // Fermeture Audio Context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    // Arrêt Micro
-    if (inputSourceRef.current) {
-      inputSourceRef.current.disconnect();
-      inputSourceRef.current = null;
-    }
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    // Arrêt Session Gemini (Pas de méthode close explicite sur la promesse, on laisse le GC ou on envoie un signal si l'API le permettait, ici on coupe juste le flux client)
-    // Note: session.close() existe sur l'objet session résolu, on pourrait le faire proprement :
-    if (liveSessionRef.current) {
-       liveSessionRef.current.then((s: any) => {
-         try { s.close(); } catch(e) {}
-       });
-    }
-    liveSessionRef.current = null;
-    setVolumeLevel(0);
   };
 
   // --- LOGIQUE CHAT CLASSIQUE ---
@@ -298,9 +328,11 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
         {/* Header */}
         <div className="absolute top-6 left-0 right-0 flex justify-center">
-           <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isLiveConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span className="text-white text-xs font-black uppercase tracking-widest">{isLiveConnected ? 'En Ligne avec Crystal' : 'Connexion...'}</span>
+           <div className={`backdrop-blur-md px-4 py-2 rounded-full border flex items-center gap-2 transition-colors ${liveError ? 'bg-rose-500/20 border-rose-500/50' : 'bg-white/10 border-white/10'}`}>
+              <span className={`w-2 h-2 rounded-full ${liveError ? 'bg-rose-500' : isLiveConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+              <span className="text-white text-xs font-black uppercase tracking-widest">
+                {liveError ? 'Erreur' : isLiveConnected ? 'En Ligne avec Crystal' : 'Connexion...'}
+              </span>
            </div>
         </div>
 
@@ -308,9 +340,12 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         <div className="relative z-10 flex flex-col items-center gap-12">
            <div className="relative w-48 h-48 sm:w-64 sm:h-64 flex items-center justify-center">
               {/* Cercles concentriques animés par le volume */}
-              <div className="absolute inset-0 rounded-full border border-emerald-500/30 transition-all duration-75" style={{ transform: `scale(${1 + volumeLevel/200})` }}></div>
-              <div className="absolute inset-4 rounded-full border border-emerald-400/20 transition-all duration-100" style={{ transform: `scale(${1 + volumeLevel/150})` }}></div>
-              <div className="absolute inset-8 rounded-full border border-emerald-300/10 transition-all duration-150" style={{ transform: `scale(${1 + volumeLevel/100})` }}></div>
+              {!liveError && (
+                <>
+                  <div className="absolute inset-0 rounded-full border border-emerald-500/30 transition-all duration-75" style={{ transform: `scale(${1 + volumeLevel/200})` }}></div>
+                  <div className="absolute inset-4 rounded-full border border-emerald-400/20 transition-all duration-100" style={{ transform: `scale(${1 + volumeLevel/150})` }}></div>
+                </>
+              )}
               
               {/* Photo Crystal */}
               <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-tr from-emerald-400 to-teal-300 p-1 shadow-2xl shadow-emerald-500/40 relative overflow-hidden">
@@ -321,16 +356,24 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
               </div>
            </div>
 
-           <div className="text-center space-y-2">
-              <p className="text-white font-black text-2xl sm:text-3xl tracking-tight">Crystal</p>
-              <p className="text-emerald-400/60 text-sm font-bold uppercase tracking-widest">IA Nutritionniste Premium</p>
+           <div className="text-center space-y-2 max-w-xs">
+              {liveError ? (
+                <p className="text-rose-400 font-bold text-sm bg-rose-900/50 p-3 rounded-xl border border-rose-500/30">
+                  {liveError}
+                </p>
+              ) : (
+                <>
+                  <p className="text-white font-black text-2xl sm:text-3xl tracking-tight">Crystal</p>
+                  <p className="text-emerald-400/60 text-sm font-bold uppercase tracking-widest">IA Nutritionniste Premium</p>
+                </>
+              )}
            </div>
         </div>
 
         {/* Controls */}
         <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-6">
            <button 
-             onClick={stopLiveSession}
+             onClick={stopLiveAndClose}
              className="w-16 h-16 sm:w-20 sm:h-20 bg-rose-500 hover:bg-rose-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-rose-900/50 transition-all transform hover:scale-110 active:scale-95"
            >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
