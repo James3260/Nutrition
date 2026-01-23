@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, Modality, FunctionDeclaration, Tool } from "@google/
 import { MealPlan, User } from "../types";
 
 // --- DÉFINITION DES OUTILS (TOOLS) ---
-const updateUserTool: FunctionDeclaration = {
+export const updateUserTool: FunctionDeclaration = {
   name: "update_user_profile",
   description: "Enregistre les informations physiques ou les préférences de l'utilisateur détectées dans la conversation.",
   parameters: {
@@ -20,9 +20,9 @@ const updateUserTool: FunctionDeclaration = {
   }
 };
 
-const proposeConceptTool: FunctionDeclaration = {
+export const proposeConceptTool: FunctionDeclaration = {
   name: "propose_meal_plan_concept",
-  description: "Propose un concept de plan de repas quand l'utilisateur a donné assez d'infos.",
+  description: "Propose un concept de plan de repas quand l'utilisateur a donné assez d'infos. DÉCLENCHE LA GÉNÉRATION DU PLAN.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -34,7 +34,7 @@ const proposeConceptTool: FunctionDeclaration = {
   }
 };
 
-const tools: Tool[] = [
+export const tools: Tool[] = [
   { functionDeclarations: [updateUserTool, proposeConceptTool] }
 ];
 
@@ -209,11 +209,11 @@ export const generateMealPlan = async (userContext: any, user: User): Promise<Me
   };
 
   const prompt = `GÉNÈRE UN PLAN DE 30 JOURS.
-  Profil: ${user.gender}, ${user.age} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight}kg.
-  Objectif: Perte de poids saine.
+  Profil: ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
+  Objectif: ${userContext.goal || 'Perte de poids saine'}.
   Préférences détectées: ${JSON.stringify(userContext)}
   
-  Règles: 30 jours complets, grammages précis, déficit calorique calculé.`;
+  Règles: 30 jours complets, recettes détaillées, grammages précis, déficit calorique calculé.`;
 
   try {
     const response = await ai.models.generateContent({

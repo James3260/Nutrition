@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
-import { chatWithAI } from '../services/gemini';
+import { chatWithAI, generateMealPlan, tools } from '../services/gemini';
 import { MealPlan, User } from '../types';
 
 interface Message {
@@ -82,6 +82,10 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   const nextStartTimeRef = useRef<number>(0);
   const audioQueueRef = useRef<AudioBufferSourceNode[]>([]);
   const animationFrameRef = useRef<number>(0);
+  
+  // Transcription Buffers
+  const currentInputTranscription = useRef<string>("");
+  const currentOutputTranscription = useRef<string>("");
 
   // Nettoyage complet
   useEffect(() => {
@@ -96,7 +100,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     }
 
     try {
-      // Nettoyage agressif pour libérer la mémoire iOS
       if (inputSourceRef.current) {
         inputSourceRef.current.disconnect();
         inputSourceRef.current = null;
@@ -159,7 +162,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       analyserRef.current = analyser;
 
       const animateVisualizer = () => {
-        // Vérification de sécurité pour éviter de tourner dans le vide
         if (!analyserRef.current || !isLiveMode) return;
         
         const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
@@ -182,10 +184,15 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
+          inputAudioTranscription: {}, // Active la transcription utilisateur
+          outputAudioTranscription: {}, // Active la transcription modèle
+          tools: tools, // Ajout des outils pour le plan
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: `Tu es Crystal, coach nutrition. Conversation orale avec ${user.name}. Réponses courtes.`,
+          systemInstruction: `Tu es Crystal, coach nutrition. Conversation orale avec ${user.name}.
+          Si l'utilisateur confirme vouloir le plan, UTILISE L'OUTIL 'propose_meal_plan_concept'.
+          Réponses courtes et naturelles.`,
         },
         callbacks: {
           onopen: () => {
@@ -216,6 +223,76 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             };
           },
           onmessage: async (msg: LiveServerMessage) => {
+            // 1. Gestion des transcriptions pour l'historique
+            if (msg.serverContent?.outputTranscription) {
+              currentOutputTranscription.current += msg.serverContent.outputTranscription.text;
+            } else if (msg.serverContent?.inputTranscription) {
+              currentInputTranscription.current += msg.serverContent.inputTranscription.text;
+            }
+
+            if (msg.serverContent?.turnComplete) {
+               const userText = currentInputTranscription.current;
+               const modelText = currentOutputTranscription.current;
+               
+               if (userText.trim()) {
+                 setMessages(prev => [...prev, { role: 'user', content: userText }]);
+               }
+               if (modelText.trim()) {
+                 setMessages(prev => [...prev, { role: 'assistant', content: modelText }]);
+               }
+               
+               currentInputTranscription.current = "";
+               currentOutputTranscription.current = "";
+            }
+
+            // 2. Gestion des outils (Génération de plan)
+            if (msg.toolCall) {
+              for (const fc of msg.toolCall.functionCalls) {
+                console.log("Tool Called:", fc.name);
+                
+                let result: any = { status: "ok" };
+
+                if (fc.name === 'update_user_profile') {
+                   const updatedUser = { ...user, ...fc.args };
+                   if (fc.args.weight) updatedUser.weightHistory = [...(user.weightHistory || []), { date: new Date().toISOString(), weight: fc.args.weight as number }];
+                   onUpdateUser(updatedUser);
+                   result = { status: "updated" };
+                }
+
+                if (fc.name === 'propose_meal_plan_concept') {
+                   // Génération réelle du plan
+                   try {
+                     // On lance la génération en arrière-plan
+                     generateMealPlan(fc.args, user).then(plan => {
+                       setMealPlan(plan);
+                       // On ajoute un message système spécial dans le chat
+                       setMessages(prev => [...prev, { 
+                         role: 'assistant', 
+                         content: "J'ai généré votre plan complet sur 30 jours ! Vous pouvez le consulter dans l'onglet Agenda.",
+                         concept: fc.args as any
+                       }]);
+                     });
+                     result = { status: "generating_in_background" };
+                   } catch (e) {
+                     console.error("Erreur generation plan", e);
+                     result = { error: "failed" };
+                   }
+                }
+
+                // Réponse obligatoire au serveur
+                sessionPromise.then(session => {
+                  session.sendToolResponse({
+                    functionResponses: {
+                      id: fc.id,
+                      name: fc.name,
+                      response: { result }
+                    }
+                  });
+                });
+              }
+            }
+
+            // 3. Audio Output
             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (audioData && audioContextRef.current) {
               const ctx = audioContextRef.current;
@@ -299,11 +376,21 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     try {
       const res = await chatWithAI(text, user, messages);
+      // Traitement des données extraites (poids, etc.) via le Tool Call dans chatWithAI aussi
       if (res.extractedInfo && Object.keys(res.extractedInfo).length > 0) {
-        const updatedUser = { ...user };
+        const updatedUser = { ...user, ...res.extractedInfo };
         if (res.extractedInfo.weight) updatedUser.weightHistory = [...(user.weightHistory || []), { date: new Date().toISOString(), weight: res.extractedInfo.weight }];
         onUpdateUser(updatedUser);
       }
+      
+      // Si concept proposé en texte
+      if (res.suggestedConcept) {
+         try {
+             const plan = await generateMealPlan(res.suggestedConcept, user);
+             setMealPlan(plan);
+         } catch(e) { console.error(e); }
+      }
+
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: res.reply || "Reçu.",
