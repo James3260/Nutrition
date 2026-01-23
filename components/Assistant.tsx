@@ -104,7 +104,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-20">
             <div className="text-5xl mb-4">✨</div>
@@ -155,7 +155,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         <div ref={messagesEndRef} className="h-4" />
       </div>
 
-      {/* Input area avec padding additionnel pour mobile (barre flottante) */}
       <div className="p-4 sm:p-6 pb-12 sm:pb-8 bg-white/40 border-t border-slate-50 shrink-0 lg:pb-6">
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
           <input 
