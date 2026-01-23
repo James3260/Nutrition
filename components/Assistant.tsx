@@ -246,15 +246,17 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             }
 
             // 2. Gestion des outils (Génération de plan)
-            if (msg.toolCall) {
+            // Correction TypeScript : Vérification stricte que functionCalls existe
+            if (msg.toolCall?.functionCalls) {
               for (const fc of msg.toolCall.functionCalls) {
                 console.log("Tool Called:", fc.name);
                 
                 let result: any = { status: "ok" };
+                const args = fc.args || {}; // Protection contre args undefined
 
                 if (fc.name === 'update_user_profile') {
-                   const updatedUser = { ...user, ...fc.args };
-                   if (fc.args.weight) updatedUser.weightHistory = [...(user.weightHistory || []), { date: new Date().toISOString(), weight: fc.args.weight as number }];
+                   const updatedUser = { ...user, ...args };
+                   if (args.weight) updatedUser.weightHistory = [...(user.weightHistory || []), { date: new Date().toISOString(), weight: args.weight as number }];
                    onUpdateUser(updatedUser);
                    result = { status: "updated" };
                 }
@@ -263,13 +265,13 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                    // Génération réelle du plan
                    try {
                      // On lance la génération en arrière-plan
-                     generateMealPlan(fc.args, user).then(plan => {
+                     generateMealPlan(args, user).then(plan => {
                        setMealPlan(plan);
                        // On ajoute un message système spécial dans le chat
                        setMessages(prev => [...prev, { 
                          role: 'assistant', 
                          content: "J'ai généré votre plan complet sur 30 jours ! Vous pouvez le consulter dans l'onglet Agenda.",
-                         concept: fc.args as any
+                         concept: args as any
                        }]);
                      });
                      result = { status: "generating_in_background" };
