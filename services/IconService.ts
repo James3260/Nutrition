@@ -9,8 +9,8 @@ declare global {
   }
 
   interface Window {
-    // Restored readonly modifier to match the platform's global declaration of aistudio and avoid identical modifier errors.
-    readonly aistudio: AIStudio;
+    // Removed readonly modifier to ensure identical modifiers with environmental declarations.
+    aistudio: AIStudio;
   }
 }
 
@@ -22,10 +22,10 @@ export class IconService {
     }
 
     // Rule: Create a new GoogleGenAI instance right before making an API call to ensure it uses the latest key.
-    // Use process.env.API_KEY directly as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = "A high-end, professional, modern minimalist app icon for 'NutriTrack AI'. The design features a stylized vibrant emerald green leaf intertwined with sleek digital AI circuit lines. Soft shadows, premium 3D render feel, white background, centered, symmetrical, 1024x1024 resolution.";
+    // Nouveau prompt ultra-premium pour un logo iconique
+    const prompt = "A high-end luxury mobile app icon for 'NutriTrack AI'. A minimalist abstract 3D emblem: a singular, glowing emerald-green crystalline structure shaped like a stylized 'N' that subtly evokes an organic leaf. The icon features a soft internal bioluminescence, encased in a polished dark obsidian glass frame with elegant chamfered edges. Photorealistic 8k render, cinematic studio lighting, deep shadows, premium aesthetic, set against a solid deep midnight black background. No text, symmetrical, masterpiece.";
 
     try {
       const response = await ai.models.generateContent({
@@ -47,7 +47,7 @@ export class IconService {
 
       const firstCandidate = response.candidates[0];
       if (firstCandidate.content && firstCandidate.content.parts) {
-        // Find the image part, do not assume it is the first part.
+        // Find the image part as recommended by the SDK guidelines.
         for (const part of firstCandidate.content.parts) {
           if (part.inlineData && part.inlineData.data) {
             const base64EncodeString: string = part.inlineData.data;
@@ -58,8 +58,7 @@ export class IconService {
 
       throw new Error("Aucune donnée d'image trouvée dans la réponse.");
     } catch (error: any) {
-      // If the request fails with an error message containing "Requested entity was not found.", 
-      // reset the key selection state and prompt the user to select a key again via openSelectKey().
+      // Rule: If Requested entity was not found, prompt user to select a key again.
       if (error.message?.includes("Requested entity was not found")) {
         await window.aistudio.openSelectKey();
       }
@@ -69,6 +68,7 @@ export class IconService {
   }
 
   static applyIcon(base64Icon: string) {
+    // Update Favicon
     let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (!favicon) {
       favicon = document.createElement('link');
@@ -77,6 +77,7 @@ export class IconService {
     }
     favicon.href = base64Icon;
 
+    // Update Apple Touch Icon
     let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
     if (!appleIcon) {
       appleIcon = document.createElement('link');
@@ -85,19 +86,26 @@ export class IconService {
     }
     appleIcon.href = base64Icon;
 
+    // Create and update Web Manifest
     const manifestContent = {
-      "name": "NutriTrack AI - Assistant Nutrition",
+      "name": "NutriTrack AI Premium",
       "short_name": "NutriTrack",
       "start_url": "/",
       "display": "standalone",
-      "background_color": "#f8fafc",
+      "background_color": "#020617",
       "theme_color": "#10b981",
       "icons": [
         {
           "src": base64Icon,
+          "sizes": "1024x1024",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": base64Icon,
           "sizes": "512x512",
           "type": "image/png",
-          "purpose": "any maskable"
+          "purpose": "maskable"
         }
       ]
     };

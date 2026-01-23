@@ -3,11 +3,11 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NutriTrack AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>NutriTrack AI | Premium Health</title>
     
     <!-- PWA & Mobile Meta Tags -->
-    <meta name="theme-color" content="#10b981">
+    <meta name="theme-color" content="#020617">
     <link rel="manifest" href="manifest.json">
     
     <!-- iOS Specific -->
@@ -23,11 +23,52 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; margin: 0; padding: 0; }
-        #root { min-height: 100vh; display: flex; flex-direction: column; }
-        /* Smooth scale-in animation */
-        .animate-scale-in { animation: scaleIn 0.5s ease-out; }
-        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        :root {
+            --sat: env(safe-area-inset-top);
+            --sar: env(safe-area-inset-right);
+            --sab: env(safe-area-inset-bottom);
+            --sal: env(safe-area-inset-left);
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #020617; 
+            margin: 0; 
+            padding: 0; 
+            color: #f8fafc;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #root { 
+            min-height: 100dvh; 
+            display: flex; 
+            flex-direction: column;
+        }
+        
+        /* Custom scrollbar chic */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.2); border-radius: 10px; }
+
+        .animate-glow {
+            filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.3));
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .float { animation: float 6s ease-in-out infinite; }
+
+        /* Handling safe areas for modern phones */
+        .pb-safe { padding-bottom: var(--sab); }
+        .pt-safe { padding-top: var(--sat); }
+
+        /* No-scrollbar utility */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 <script type="importmap">
 {
@@ -46,9 +87,9 @@
 </head>
 <body>
     <div id="root">
-        <div style="height: 100vh; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; color: white;">
-            <div style="width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <p style="margin-top: 20px; font-weight: 900; letter-spacing: 0.2em; font-size: 10px; font-family: sans-serif; opacity: 0.5;">NUTRITRACK AI</p>
+        <div style="height: 100dvh; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #020617;">
+            <div style="width: 40px; height: 40px; border: 2px solid rgba(16, 185, 129, 0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;"></div>
+            <p style="margin-top: 24px; font-weight: 900; letter-spacing: 0.3em; font-size: 10px; color: #10b981; opacity: 0.8; text-transform: uppercase;">NutriTrack AI</p>
         </div>
     </div>
     <script type="module" src="/index.tsx"></script>

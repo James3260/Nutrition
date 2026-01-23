@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Tab, User } from '../types';
-import NotificationToggle from './NotificationToggle';
 
 interface NavbarProps {
   activeTab: Tab;
@@ -14,7 +13,7 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ 
-  activeTab, setActiveTab, onLogout, user, cloudStatus, isCloudConfigured, onCloudRestore 
+  activeTab, setActiveTab, onLogout, user
 }) => {
   const tabs: { id: Tab; label: string; icon: string; adminOnly?: boolean }[] = [
     { id: 'daily', label: 'Aujourd\'hui', icon: '📊' },
@@ -29,61 +28,86 @@ const Navbar: React.FC<NavbarProps> = ({
   const visibleTabs = tabs.filter(t => !t.adminOnly || user.role === 'admin');
 
   return (
-    <nav className="bg-white shadow-sm border-b border-slate-100 w-full shrink-0 relative z-50">
-      <div className="container mx-auto h-16 px-4 flex items-center justify-between gap-4">
-        
-        {/* Logo Logo */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-black shadow-lg shadow-emerald-100">N</div>
-        </div>
+    <>
+      {/* Desktop/Tablet Header (Top) */}
+      <nav className="hidden md:block w-full shrink-0 relative z-50 pt-6 px-6">
+        <div className="container mx-auto max-w-6xl h-20 bg-slate-900/60 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 px-8 flex items-center justify-between shadow-2xl">
+          
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-11 h-11 bg-emerald-500 rounded-2xl flex items-center justify-center text-white font-black shadow-lg shadow-emerald-500/20 transform -rotate-6">N</div>
+            <span className="hidden lg:block font-black text-sm tracking-tighter uppercase">NutriTrack</span>
+          </div>
 
-        {/* Tab Icons Only */}
-        <div className="flex-1 flex justify-center items-center overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2 p-1.5 bg-slate-50 rounded-2xl">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
-                className={`flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-300 ${
-                  activeTab === tab.id 
-                    ? 'bg-slate-900 text-white shadow-lg shadow-slate-200 scale-105' 
-                    : 'text-slate-400 hover:text-slate-600 hover:bg-white'
-                }`}
-              >
-                <span className="text-xl">{tab.icon}</span>
-              </button>
-            ))}
+          <div className="flex-1 flex justify-center items-center overflow-x-auto no-scrollbar mx-4">
+            <div className="flex items-center gap-1.5 p-1 bg-black/20 rounded-2xl border border-white/5">
+              {visibleTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-500 ${
+                    activeTab === tab.id 
+                      ? 'bg-emerald-500 text-white shadow-[0_8px_20px_-5px_rgba(16,185,129,0.5)] scale-105' 
+                      : 'text-slate-500 hover:text-emerald-400 hover:bg-white/5'
+                  }`}
+                  title={tab.label}
+                >
+                  <span className="text-xl">{tab.icon}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden sm:flex items-center gap-3 mr-4">
+               <div className="text-right">
+                  <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{user.name.split(' ')[0]}</p>
+                  <p className="text-[8px] font-black uppercase text-emerald-500 tracking-widest">Premium Gold</p>
+               </div>
+               {user.picture && (
+                 <img src={user.picture} className="w-9 h-9 rounded-xl border border-white/10" alt="Profile" />
+               )}
+            </div>
+            
+            <button 
+              onClick={onLogout} 
+              className="w-11 h-11 flex items-center justify-center text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+              </svg>
+            </button>
           </div>
         </div>
+      </nav>
 
-        {/* System Actions */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button 
-            onClick={onCloudRestore}
-            title="Synchronisation Cloud"
-            className={`p-2.5 rounded-xl transition-all ${cloudStatus === 'synced' ? 'text-emerald-500 bg-emerald-50' : 'text-slate-300 hover:bg-slate-50'}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-            </svg>
-          </button>
-          
-          <NotificationToggle />
-          
-          <button 
-            onClick={onLogout} 
-            title="Déconnexion"
-            className="p-2.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
+      {/* Mobile Header (Brand Only) */}
+      <div className="md:hidden w-full pt-4 pb-2 px-6 flex items-center justify-between z-50">
+        <div className="flex items-center gap-2">
+           <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-lg transform -rotate-6">N</div>
+           <span className="font-black text-xs tracking-widest uppercase text-emerald-500">NutriTrack</span>
         </div>
+        <button onClick={onLogout} className="text-slate-500 p-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg>
+        </button>
       </div>
-      <style>{`.no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-    </nav>
+
+      {/* Mobile Navigation (Bottom) */}
+      <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] z-[60] bg-slate-900/80 backdrop-blur-3xl rounded-3xl border border-white/10 p-2 shadow-2xl flex items-center justify-around">
+        {visibleTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${
+              activeTab === tab.id 
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 scale-110' 
+                : 'text-slate-500'
+            }`}
+          >
+            <span className="text-xl">{tab.icon}</span>
+          </button>
+        ))}
+      </nav>
+    </>
   );
 };
 

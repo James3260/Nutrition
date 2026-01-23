@@ -12,6 +12,7 @@ import AdminPanel from './components/AdminPanel';
 import DailyDashboard from './components/DailyDashboard';
 import { StorageService } from './services/StorageService';
 import { CloudSyncService } from './services/CloudSyncService';
+import { IconService } from './services/IconService';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -112,7 +113,25 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       CloudSyncService.init();
-      // On charge l'utilisateur local en priorité pour éviter le flash de login
+      
+      // Tentative de génération de l'icône premium en arrière-plan
+      try {
+        const savedIcon = await StorageService.loadData('app_icon_base64');
+        if (savedIcon) {
+          IconService.applyIcon(savedIcon);
+        } else {
+          // On ne le fait que si l'utilisateur est déjà loggé ou au premier besoin pour ne pas bloquer
+          // mais ici on peut tenter de le faire si la clé est déjà là
+          if (await window.aistudio.hasSelectedApiKey()) {
+            const newIcon = await IconService.generateAppIcon();
+            IconService.applyIcon(newIcon);
+            await StorageService.saveData('app_icon_base64', newIcon);
+          }
+        }
+      } catch (e) {
+        console.warn("Icon generation deferred");
+      }
+
       const savedUser = await StorageService.loadData('current_user');
       const savedPlan = await StorageService.loadData('plan');
       const savedChat = await StorageService.loadData('chat_history');
@@ -144,13 +163,24 @@ const App: React.FC = () => {
     CloudSyncService.setUserId(u.googleId || u.id);
     setUser(u);
     addHistoryEvent("Authentification", `Connecté (${u.name})`, "system");
+    
+    // Une fois loggé, on génère l'icône si elle n'existe pas
+    const savedIcon = await StorageService.loadData('app_icon_base64');
+    if (!savedIcon) {
+       try {
+         const newIcon = await IconService.generateAppIcon();
+         IconService.applyIcon(newIcon);
+         await StorageService.saveData('app_icon_base64', newIcon);
+       } catch(e) {}
+    }
+    
     await syncWithCloud(true);
   };
 
   if (!isReady) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#0f172a] text-white">
-      <div className="w-10 h-10 border-4 border-white/10 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
-      <p className="tracking-widest text-[9px] font-black uppercase opacity-40">Initialisation...</p>
+    <div className="h-screen flex flex-col items-center justify-center bg-[#020617] text-white">
+      <div className="w-12 h-12 border-4 border-white/5 border-t-emerald-500 rounded-full animate-spin mb-6"></div>
+      <p className="tracking-[0.4em] text-[10px] font-black uppercase opacity-40">NutriTrack Premium</p>
     </div>
   );
 
@@ -159,7 +189,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-[100dvh] bg-slate-50 flex flex-col overflow-hidden relative font-sans">
+    <div className="h-[100dvh] bg-[#020617] flex flex-col overflow-hidden relative font-sans text-slate-200">
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -184,15 +214,15 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-white border-t py-2 px-6 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full">
+      <footer className="bg-black/40 backdrop-blur-md border-t border-white/5 py-3 px-8 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.3em] text-slate-600 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/5 text-emerald-500 rounded-full border border-emerald-500/10">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span>CLOUD NUTRITRACK : {CloudSyncService.getUserId()?.substr(0, 8)}...</span>
+            <span>SECURE CLOUD : {CloudSyncService.getUserId()?.substr(0, 8)}</span>
           </div>
           <span className="opacity-40">{user.name}</span>
         </div>
-        <div className="hidden md:block">NUTRITRACK 10.0 • GUEST MODE SUPPORTED</div>
+        <div className="hidden md:block">NUTRITRACK STUDIO EDITION • 2025</div>
       </footer>
     </div>
   );
