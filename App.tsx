@@ -145,9 +145,7 @@ const App: React.FC = () => {
 
   if (!user || !user.isAuthenticated) return <Login onLogin={handleLogin} />;
 
-  // Calcul des classes pour le layout
-  // Si Assistant : on veut ZERO padding, ZERO margin, FULL width/height.
-  // Sinon : on garde le layout "Dashboard" avec padding.
+  // Modification Layout : Si Assistant, on veut le plein écran (pas de padding, pas de conteneur centré)
   const isAssistant = activeTab === 'assistant';
 
   return (
@@ -162,7 +160,12 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 lg:pt-0 ${isAssistant ? 'h-[100dvh]' : 'overflow-y-auto no-scrollbar'}`}>
+      {/* 
+        Container Principal 
+        - isAssistant : h-full overflow-hidden (c'est l'Assistant qui gère le scroll interne) + pas de padding.
+        - Autre : overflow-y-auto (scroll global) + padding.
+      */}
+      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 lg:pt-0 transition-all duration-300 ${isAssistant ? 'h-full overflow-hidden' : 'overflow-y-auto no-scrollbar'}`}>
         <div className={`w-full h-full ${isAssistant ? '' : 'p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto'}`}>
           {isAssistant && (
             <Assistant 

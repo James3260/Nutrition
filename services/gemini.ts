@@ -81,6 +81,14 @@ const CHAT_EXTRACTION_SCHEMA = {
 };
 
 export const chatWithAI = async (message: string, user: User, chatHistory: any[]): Promise<any> => {
+  // Vérification de sécurité pour aider au débogage
+  if (!process.env.API_KEY) {
+    console.error("API_KEY manquante");
+    return { 
+      reply: "⚠️ Configuration requise : La clé API Google (API_KEY) est absente. Veuillez l'ajouter dans les variables d'environnement de votre projet Vercel." 
+    };
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const systemInstruction = `Tu es l'Expert NutriTrack Crystal, le coach nutritionnel le plus avancé.
@@ -89,18 +97,36 @@ export const chatWithAI = async (message: string, user: User, chatHistory: any[]
   PROTOCOLE OBLIGATOIRE :
   1. ANALYSE PHYSIQUE : Si manquant, demande : Poids, Taille, Âge, Sexe. (Crucial pour le BMR).
   2. PRÉFÉRENCES : Demande les goûts, allergies et ce qu'il déteste.
-  3. LOGISTIQUE : Demande la date de début souhaitée, le nombre de repas par jour et si les repas peuvent être répétés (ex: cuisiner pour 2 jours).
-  4. CONCEPT : Une fois les infos reçues, propose un "Concept de Plan" (ex: Méditerranéen, 1600kcal) et demande "Es-tu d'accord pour que je génère ce plan de 30 jours ?".
-  5. GÉNÉRATION : Ne déclenche 'readyToGenerate' que si l'utilisateur dit OUI/VALIDÉ après ton concept.
+  3. LOGISTIQUE : Demande la date de début souhaitée.
+  4. CONCEPT : Une fois les infos reçues, propose un "Concept de Plan" et demande validation.
+  5. GÉNÉRATION : Ne déclenche 'readyToGenerate' que si l'utilisateur valide explicitement.
 
-  TON TON : Professionnel, bienveillant, expert.
+  TON TON : Professionnel, bienveillant, expert, concis (style SMS).
   
-  DONNÉES UTILISATEUR : ${JSON.stringify(user)}`;
+  DONNÉES UTILISATEUR : ${JSON.stringify({
+    name: user.name,
+    age: user.age,
+    gender: user.gender,
+    weight: user.weightHistory?.[user.weightHistory.length-1]?.weight,
+    height: user.height
+  })}`;
+
+  // Conversion de l'historique pour le SDK (mapping 'assistant' -> 'model')
+  const historyContents = chatHistory.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.content }]
+  }));
+
+  // Ajout du message actuel
+  const contents = [
+    ...historyContents,
+    { role: 'user', parts: [{ text: message }] }
+  ];
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: message,
+      contents: contents,
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -108,18 +134,26 @@ export const chatWithAI = async (message: string, user: User, chatHistory: any[]
       },
     });
 
-    return JSON.parse(response.text || '{}');
+    const text = response.text;
+    if (!text) throw new Error("Réponse vide de l'IA");
+    return JSON.parse(text);
+
   } catch (error) {
     console.error("Chat error:", error);
-    return { reply: "Une erreur est survenue, veuillez réessayer." };
+    // Fallback gracieux en cas d'erreur technique
+    return { 
+      reply: "Désolé, j'ai eu un petit vertige numérique. Pouvez-vous reformuler ?" 
+    };
   }
 };
 
 export const generateMealPlan = async (userContext: any, user: User): Promise<MealPlan> => {
+  if (!process.env.API_KEY) throw new Error("API Key manquante");
+  
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const prompt = `GÉNÈRE UN PLAN DE 30 JOURS COMPLET.
-  Utilisateur : ${user.name}, ${user.gender}, ${user.age} ans, ${user.height}cm, ${user.weightHistory?.[user.weightHistory.length-1]?.weight}kg.
+  Utilisateur : ${user.name}, ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.height || 170}cm, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
   Contexte additionnel : ${JSON.stringify(userContext)}
   
   RÈGLES STRICTES :
@@ -130,7 +164,7 @@ export const generateMealPlan = async (userContext: any, user: User): Promise<Me
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-pro-preview', // Modèle plus puissant pour la génération complexe
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -139,7 +173,6 @@ export const generateMealPlan = async (userContext: any, user: User): Promise<Me
     });
 
     const result = JSON.parse(response.text || '{}');
-    // Ajouter la date de début extraite ou aujourd'hui par défaut
     result.startDate = userContext.startDate || new Date().toISOString();
     return result;
   } catch (error) {
