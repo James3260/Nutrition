@@ -145,6 +145,11 @@ const App: React.FC = () => {
 
   if (!user || !user.isAuthenticated) return <Login onLogin={handleLogin} />;
 
+  // Calcul des classes pour le layout
+  // Si Assistant : on veut ZERO padding, ZERO margin, FULL width/height.
+  // Sinon : on garde le layout "Dashboard" avec padding.
+  const isAssistant = activeTab === 'assistant';
+
   return (
     <div className="flex flex-col lg:flex-row h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
       <Navbar 
@@ -157,24 +162,16 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      {/* 
-         Structure de scroll revue : 
-         - paddingTop (pt-16) pour compenser le header fixe sur mobile.
-         - Si Assistant : overflow-hidden sur main pour laisser Assistant gérer le scroll interne.
-         - Sinon : overflow-y-auto sur main pour le scroll global.
-      */}
-      <main className={`flex-1 min-w-0 relative pt-16 lg:pt-0 ${activeTab === 'assistant' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto no-scrollbar'}`}>
-        <div className={`mx-auto w-full ${activeTab === 'assistant' ? 'h-full p-4 sm:p-6 lg:p-12 max-w-7xl' : 'p-4 sm:p-6 lg:p-12 max-w-7xl'}`}>
-          {activeTab === 'assistant' && (
-            <div className="h-full">
-              <Assistant 
-                setMealPlan={setMealPlan} 
-                user={user} 
-                onUpdateUser={setUser} 
-                messages={chatMessages} 
-                setMessages={setChatMessages} 
-              />
-            </div>
+      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 lg:pt-0 ${isAssistant ? 'h-[100dvh]' : 'overflow-y-auto no-scrollbar'}`}>
+        <div className={`w-full h-full ${isAssistant ? '' : 'p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto'}`}>
+          {isAssistant && (
+            <Assistant 
+              setMealPlan={setMealPlan} 
+              user={user} 
+              onUpdateUser={setUser} 
+              messages={chatMessages} 
+              setMessages={setChatMessages} 
+            />
           )}
           {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
           {activeTab === 'calendar' && <CalendarView mealPlan={mealPlan} />}
