@@ -63,6 +63,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string; // Ajouté pour la gestion famille locale
   picture?: string; // Ajouté pour Google
   googleId?: string; // Ajouté pour Google
   role: 'admin' | 'user';

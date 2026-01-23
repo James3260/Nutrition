@@ -130,7 +130,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         },
         onmessage: async (message: LiveServerMessage) => {
           if (message.serverContent?.outputTranscription) {
-            const text = message.serverContent.outputTranscription.text;
+            const text = message.serverContent.outputTranscription.text || '';
             setMessages(prev => {
               const last = prev[prev.length - 1];
               if (last && last.role === 'assistant' && last.isAudio) {
@@ -140,7 +140,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             });
           }
 
-          const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+          const parts = message.serverContent?.modelTurn?.parts;
+          const base64Audio = parts && parts.length > 0 ? parts[0].inlineData?.data : null;
+          
           if (base64Audio) {
             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputAudioContext.currentTime);
             const buffer = await decodeAudioData(decode(base64Audio), outputAudioContext, 24000, 1);

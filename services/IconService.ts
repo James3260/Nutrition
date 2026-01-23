@@ -9,8 +9,8 @@ declare global {
   }
 
   interface Window {
-    // Removed readonly modifier to match the platform's global declaration of aistudio and avoid identical modifier errors.
-    aistudio: AIStudio;
+    // Restored readonly modifier to match the platform's global declaration of aistudio and avoid identical modifier errors.
+    readonly aistudio: AIStudio;
   }
 }
 
@@ -49,7 +49,7 @@ export class IconService {
       if (firstCandidate.content && firstCandidate.content.parts) {
         // Find the image part, do not assume it is the first part.
         for (const part of firstCandidate.content.parts) {
-          if (part.inlineData) {
+          if (part.inlineData && part.inlineData.data) {
             const base64EncodeString: string = part.inlineData.data;
             return `data:image/png;base64,${base64EncodeString}`;
           }
