@@ -246,13 +246,12 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             }
 
             // 2. Gestion des outils (Génération de plan)
-            // Correction TypeScript : Vérification stricte que functionCalls existe
             if (msg.toolCall?.functionCalls) {
               for (const fc of msg.toolCall.functionCalls) {
                 console.log("Tool Called:", fc.name);
                 
                 let result: any = { status: "ok" };
-                const args = fc.args || {}; // Protection contre args undefined
+                const args = fc.args || {};
 
                 if (fc.name === 'update_user_profile') {
                    const updatedUser = { ...user, ...args };
@@ -264,10 +263,8 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                 if (fc.name === 'propose_meal_plan_concept') {
                    // Génération réelle du plan
                    try {
-                     // On lance la génération en arrière-plan
                      generateMealPlan(args, user).then(plan => {
                        setMealPlan(plan);
-                       // On ajoute un message système spécial dans le chat
                        setMessages(prev => [...prev, { 
                          role: 'assistant', 
                          content: "J'ai généré votre plan complet sur 30 jours ! Vous pouvez le consulter dans l'onglet Agenda.",
@@ -281,7 +278,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                    }
                 }
 
-                // Réponse obligatoire au serveur
                 sessionPromise.then(session => {
                   session.sendToolResponse({
                     functionResponses: {
@@ -462,13 +458,14 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     );
   }
 
-  // MODE CHAT STANDARD (Optimisé Mobile)
+  // MODE CHAT STANDARD (Refactorisé Flexbox pour Tablette)
   return (
     <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden font-sans">
       {/* Background ultra-léger sans blur GPU coûteux */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-50 via-slate-50 to-slate-50 pointer-events-none z-0"></div>
 
-      <div className="absolute top-0 left-0 right-0 z-20 px-6 py-4 flex items-center justify-between bg-white/95 border-b border-white/50 shadow-sm">
+      {/* Header */}
+      <div className="shrink-0 z-20 px-6 py-4 flex items-center justify-between bg-white/95 border-b border-white/50 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-tr from-emerald-400 to-teal-400 rounded-full flex items-center justify-center text-lg text-white shadow-sm">✨</div>
@@ -484,33 +481,37 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pt-24 pb-32 px-4 sm:px-6 space-y-6 scroll-smooth z-10 custom-scrollbar">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center mt-20 text-center animate-in fade-in duration-700">
-            <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center text-5xl mb-6 shadow-sm border border-slate-100">🎙️</div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight mb-2">Bonjour {user.name.split(' ')[0]}</h3>
-            <p className="text-sm text-slate-400 max-w-xs leading-relaxed mx-auto mb-8">Je suis Crystal. Je peux vous aider à planifier vos repas ou discuter nutrition.</p>
-            <button onClick={startLiveSession} className="group relative inline-flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100 hover:bg-emerald-500 transition-transform active:scale-95">
-              <span>⚡</span> Discuter en Direct
-            </button>
-          </div>
-        )}
-        {messages.map((msg, i) => {
-          const isUser = msg.role === 'user';
-          return (
-            <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-              <div className={`px-5 py-3.5 max-w-[85%] sm:max-w-[75%] text-[15px] leading-relaxed shadow-sm ${isUser ? 'bg-emerald-600 text-white rounded-[1.2rem] rounded-tr-sm' : 'bg-white text-slate-700 border border-slate-100 rounded-[1.2rem] rounded-tl-sm'}`}>
-                {msg.content}
+      {/* Messages Area (Flex-1 prend tout l'espace disponible) */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 scroll-smooth z-10 custom-scrollbar flex flex-col items-center">
+        <div className="w-full max-w-3xl space-y-6 pb-2">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center mt-20 text-center animate-in fade-in duration-700">
+                <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center text-5xl mb-6 shadow-sm border border-slate-100">🎙️</div>
+                <h3 className="text-xl font-black text-slate-800 tracking-tight mb-2">Bonjour {user.name.split(' ')[0]}</h3>
+                <p className="text-sm text-slate-400 max-w-xs leading-relaxed mx-auto mb-8">Je suis Crystal. Je peux vous aider à planifier vos repas ou discuter nutrition.</p>
+                <button onClick={startLiveSession} className="group relative inline-flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100 hover:bg-emerald-500 transition-transform active:scale-95">
+                  <span>⚡</span> Discuter en Direct
+                </button>
               </div>
-            </div>
-          );
-        })}
-        {isLoading && (<div className="flex justify-start"><div className="bg-white px-5 py-4 rounded-[1.5rem] rounded-tl-sm shadow-sm border border-slate-100 flex gap-1.5"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.1s]"></div><div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.2s]"></div></div></div>)}
-        <div ref={messagesEndRef} className="h-4" /> 
+            )}
+            {messages.map((msg, i) => {
+              const isUser = msg.role === 'user';
+              return (
+                <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+                  <div className={`px-5 py-3.5 max-w-[85%] md:max-w-[70%] text-[15px] leading-relaxed shadow-sm ${isUser ? 'bg-emerald-600 text-white rounded-[1.2rem] rounded-tr-sm' : 'bg-white text-slate-700 border border-slate-100 rounded-[1.2rem] rounded-tl-sm'}`}>
+                    {msg.content}
+                  </div>
+                </div>
+              );
+            })}
+            {isLoading && (<div className="flex justify-start"><div className="bg-white px-5 py-4 rounded-[1.5rem] rounded-tl-sm shadow-sm border border-slate-100 flex gap-1.5"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.1s]"></div><div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.2s]"></div></div></div>)}
+            <div ref={messagesEndRef} className="h-4" /> 
+        </div>
       </div>
 
-      <div className="absolute bottom-6 left-0 right-0 px-4 sm:px-6 z-30">
-        <div className="max-w-4xl mx-auto flex gap-3">
+      {/* Input Area (Fixe en bas, centré, largeur limitée sur tablette) */}
+      <div className="shrink-0 p-4 sm:px-6 bg-white/50 backdrop-blur-md border-t border-white/50 z-30">
+        <div className="max-w-3xl mx-auto flex gap-3">
             <form onSubmit={handleTextSubmit} className="flex-1 flex gap-2 items-center bg-white p-2 rounded-full shadow-lg shadow-slate-200/50 border border-slate-100">
               <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Écrivez à Crystal..." className="flex-1 bg-transparent border-none outline-none text-[15px] px-6 py-3 text-slate-700 placeholder:text-slate-400 font-medium" />
               <button type="submit" disabled={!input.trim() || isLoading} className="w-11 h-11 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center shadow-md shrink-0 transition-transform active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed">

@@ -79,12 +79,16 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
 
   const systemInstruction = `Tu es Crystal, coach nutrition d'élite.
   TON STYLE : Court, vif, empathique. Comme un SMS d'un ami expert.
-  TA MISSION : Construire un plan de 30 jours.
+  
+  RÈGLE ABSOLUE : Chaque réponse doit contenir du TEXTE, même si tu utilises un outil.
+  Si l'utilisateur dit juste "Bonjour", réponds poliment et demande son objectif. N'appelle pas d'outil pour "Bonjour".
+  
   PROCESSUS :
   1. Pose UNE question à la fois pour connaître : Poids, Taille, Âge, Sexe, Objectif.
-  2. UTILISE L'OUTIL 'update_user_profile' dès qu'une info est donnée.
+  2. UTILISE L'OUTIL 'update_user_profile' dès qu'une info est donnée. ACCOMPAGNE CELA D'UNE PHRASE DE CONFIRMATION.
   3. Quand tu as tout, UTILISE L'OUTIL 'propose_meal_plan_concept'.
-  4. Réponds toujours en texte naturel, pas de JSON brut dans le texte.`;
+  
+  Ne renvoie JAMAIS de JSON brut dans le texte visible.`;
 
   // On limite l'historique pour éviter de saturer le contexte
   const limitedHistory = chatHistory.slice(-10).map(msg => ({
@@ -132,8 +136,7 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       result.reply = response.text;
     }
 
-    // 2. Vérifier les appels d'outils (Function Calls) - CORRECTION DE L'ERREUR TYPESCRIPT
-    // response.functionCalls est une propriété (getter), pas une fonction.
+    // 2. Vérifier les appels d'outils (Function Calls)
     const functionCalls = response.functionCalls; 
     
     if (functionCalls && functionCalls.length > 0) {
@@ -147,13 +150,20 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       }
     }
 
+    // --- FALLBACKS INTELLIGENTS ---
+    // Si l'IA a utilisé un outil mais n'a rien dit (bug fréquent), on génère une réponse logique.
+    if (!result.reply && Object.keys(result.extractedInfo).length > 0) {
+        const infoKeys = Object.keys(result.extractedInfo).join(', ');
+        result.reply = `C'est noté (${infoKeys}). Avez-vous d'autres précisions ou préférences ?`;
+    }
+
     if (!result.reply && result.suggestedConcept) {
       result.reply = "J'ai bien analysé vos besoins. Voici le concept que je vous propose :";
     }
     
-    // Fallback si vide
+    // Fallback ultime
     if (!result.reply && !result.suggestedConcept) {
-        result.reply = "Je vous écoute.";
+        result.reply = "Je vous écoute, dites-m'en plus sur vos objectifs.";
     }
 
     return result;
@@ -161,7 +171,7 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   } catch (error) {
     console.error("Chat error:", error);
     return { 
-      reply: "Désolé, je n'ai pas bien compris. Pouvez-vous répéter ?" 
+      reply: "Désolé, une erreur de connexion est survenue. Pouvez-vous répéter ?" 
     };
   }
 };
