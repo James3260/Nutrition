@@ -140,7 +140,8 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
     }
 
     // 2. Vérifier les appels d'outils (Function Calls)
-    const functionCalls = response.functionCalls();
+    // FIX: Utilisation de la propriété .functionCalls (sans parenthèses)
+    const functionCalls = response.functionCalls;
     if (functionCalls && functionCalls.length > 0) {
       for (const call of functionCalls) {
         if (call.name === 'update_user_profile') {
