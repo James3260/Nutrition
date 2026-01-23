@@ -1,86 +1,47 @@
 
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Modality, FunctionDeclaration, Tool } from "@google/genai";
 import { MealPlan, User } from "../types";
 
-const MEAL_PLAN_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    days: {
-      type: Type.ARRAY,
-      description: "A 30-day meal plan based on the user's specific request and start date",
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          day: { type: Type.INTEGER },
-          lunch: { type: Type.STRING, description: "ID of the lunch recipe" },
-          dinner: { type: Type.STRING, description: "ID of the dinner recipe" }
-        },
-        required: ["day", "lunch", "dinner"]
-      }
-    },
-    recipes: {
-      type: Type.ARRAY,
-      description: "List of unique recipes with custom portions (grams) calculated for the user",
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.STRING },
-          name: { type: Type.STRING },
-          ingredients: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                item: { type: Type.STRING },
-                amount: { type: Type.STRING, description: "Portion EXACTE en grammes (ex: '150g') calculée selon le BMR de l'utilisateur" }
-              },
-              required: ["item", "amount"]
-            }
-          },
-          steps: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          calories: { type: Type.INTEGER, description: "Total calories for this specific portion" }
-        },
-        required: ["id", "name", "ingredients", "steps", "calories"]
-      }
+// --- DÉFINITION DES OUTILS (TOOLS) ---
+// Au lieu de forcer l'IA à répondre en JSON, on lui donne des "outils" qu'elle peut appeler si besoin.
+// C'est beaucoup plus rapide et naturel.
+
+const updateUserTool: FunctionDeclaration = {
+  name: "update_user_profile",
+  description: "Enregistre les informations physiques ou les préférences de l'utilisateur détectées dans la conversation.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      weight: { type: Type.NUMBER, description: "Poids en kg" },
+      height: { type: Type.NUMBER, description: "Taille en cm" },
+      age: { type: Type.NUMBER, description: "Âge" },
+      gender: { type: Type.STRING, enum: ["man", "woman"], description: "Genre" },
+      goal: { type: Type.STRING, description: "Objectif (ex: perte de poids)" },
+      exclusions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Allergies ou aliments détestés" },
+      startDate: { type: Type.STRING, description: "Date de début du régime" }
     }
-  },
-  required: ["days", "recipes"]
+  }
 };
 
-const CHAT_EXTRACTION_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    reply: { type: Type.STRING, description: "La réponse naturelle et encourageante du coach" },
-    readyToGenerate: { type: Type.BOOLEAN, description: "Passer à TRUE uniquement quand l'utilisateur a validé le concept et fourni toutes les infos (poids, taille, âge, date début)" },
-    suggestedConcept: {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        description: { type: Type.STRING, description: "Résumé du type de cuisine et de la stratégie calorique" },
-        exampleMeals: { type: Type.ARRAY, items: { type: Type.STRING } }
-      }
+const proposeConceptTool: FunctionDeclaration = {
+  name: "propose_meal_plan_concept",
+  description: "Propose un concept de plan de repas quand l'utilisateur a donné assez d'infos.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "Titre accrocheur du plan" },
+      description: { type: Type.STRING, description: "Description courte de la stratégie" },
+      exampleMeals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 exemples de plats" }
     },
-    extractedInfo: {
-      type: Type.OBJECT,
-      properties: {
-        weight: { type: Type.NUMBER },
-        height: { type: Type.NUMBER },
-        age: { type: Type.NUMBER },
-        gender: { type: Type.STRING, enum: ["man", "woman"] },
-        baseActivityLevel: { type: Type.STRING, enum: ["sedentary", "light", "moderate", "active", "very_active"] },
-        goal: { type: Type.STRING },
-        startDate: { type: Type.STRING, description: "La date de début souhaitée" },
-        exclusions: { type: Type.ARRAY, items: { type: Type.STRING } }
-      }
-    }
-  },
-  required: ["reply"]
+    required: ["title", "description", "exampleMeals"]
+  }
 };
 
-// Fonction utilitaire pour le TTS (Text-to-Speech)
+const tools: Tool[] = [
+  { functionDeclarations: [updateUserTool, proposeConceptTool] }
+];
+
+// --- TTS (Synthèse vocale) ---
 export const generateSpeech = async (text: string): Promise<string | null> => {
   if (!process.env.API_KEY) return null;
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -93,7 +54,7 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Voix douce et naturelle
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
@@ -107,39 +68,36 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
   }
 };
 
+// --- CHAT PRINCIPAL ---
 export const chatWithAI = async (input: string | { audioData: string, mimeType: string }, user: User, chatHistory: any[]): Promise<any> => {
   if (!process.env.API_KEY) {
-    return { 
-      reply: "⚠️ Configuration requise : Clé API manquante." 
-    };
+    return { reply: "⚠️ Erreur : Clé API manquante dans Vercel." };
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const systemInstruction = `Tu es l'Expert NutriTrack Crystal, le coach nutritionnel le plus avancé.
-  Ta mission : Créer un plan de 30 jours 100% personnalisé pour la perte de poids.
-  
-  Ton style :
-  - Si on te parle, sois chaleureux et direct.
-  - Réponses courtes (style messagerie).
-  - Collecte les infos (Poids, Taille, Age, Sexe, Objectif) au fil de la conversation.
-  - Une fois tout collecté, propose un concept.
-  
-  DONNÉES UTILISATEUR : ${JSON.stringify({
-    name: user.name,
-    age: user.age,
-    gender: user.gender,
-    weight: user.weightHistory?.[user.weightHistory.length-1]?.weight,
-    height: user.height
-  })}`;
+  // OPTIMISATION 1 : Choix du modèle
+  // Texte seul -> Gemini 3 Flash (Plus rapide et intelligent)
+  // Audio -> Gemini 2.5 Flash (Meilleur support multimodal actuel)
+  const isAudioInput = typeof input !== 'string';
+  const modelName = isAudioInput ? 'gemini-2.5-flash-preview' : 'gemini-3-flash-preview';
 
-  // Mapping de l'historique
-  const historyContents = chatHistory.map(msg => ({
+  const systemInstruction = `Tu es Crystal, coach nutrition d'élite.
+  TON STYLE : Court, vif, empathique. Comme un SMS d'un ami expert.
+  TA MISSION : Construire un plan de 30 jours.
+  PROCESSUS :
+  1. Pose UNE question à la fois pour connaître : Poids, Taille, Âge, Sexe, Objectif.
+  2. UTILISE L'OUTIL 'update_user_profile' dès qu'une info est donnée.
+  3. Quand tu as tout, UTILISE L'OUTIL 'propose_meal_plan_concept'.
+  4. Ne fais pas de JSON dans ta réponse texte. Parle normalement.`;
+
+  // OPTIMISATION 2 : Limiter l'historique pour accélérer le traitement
+  // On ne garde que les 15 derniers messages pour éviter de saturer le modèle
+  const limitedHistory = chatHistory.slice(-15).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }] // On garde l'historique en texte pour économiser des tokens
+    parts: [{ text: msg.content }]
   }));
 
-  // Préparation du message actuel (Texte OU Audio)
   let currentPart;
   if (typeof input === 'string') {
     currentPart = { text: input };
@@ -153,50 +111,115 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   }
 
   const contents = [
-    ...historyContents,
+    ...limitedHistory,
     { role: 'user', parts: [currentPart] }
   ];
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview', // Supporte l'audio en entrée mieux que le 3-flash pour l'instant
+      model: modelName,
       contents: contents,
       config: {
         systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: CHAT_EXTRACTION_SCHEMA,
+        tools: tools, // Utilisation des Tools au lieu de responseSchema
+        temperature: 0.7, // Plus créatif et naturel
       },
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Réponse vide de l'IA");
-    return JSON.parse(text);
+    // ANALYSE DE LA RÉPONSE
+    // Le modèle peut répondre par du texte ET/OU des appels de fonction
+    const result = {
+      reply: "",
+      extractedInfo: {} as any,
+      suggestedConcept: undefined as any
+    };
+
+    // 1. Récupérer le texte (réponse naturelle)
+    if (response.text) {
+      result.reply = response.text;
+    }
+
+    // 2. Vérifier les appels d'outils (Function Calls)
+    const functionCalls = response.functionCalls();
+    if (functionCalls && functionCalls.length > 0) {
+      for (const call of functionCalls) {
+        if (call.name === 'update_user_profile') {
+          result.extractedInfo = { ...result.extractedInfo, ...call.args };
+        }
+        if (call.name === 'propose_meal_plan_concept') {
+          result.suggestedConcept = call.args;
+        }
+      }
+    }
+
+    // Si le modèle a juste appelé une fonction sans parler (rare avec Gemini 3), on ajoute un fallback
+    if (!result.reply && result.suggestedConcept) {
+      result.reply = "J'ai analysé vos besoins. Voici ce que je vous propose :";
+    }
+
+    return result;
 
   } catch (error) {
     console.error("Chat error:", error);
     return { 
-      reply: "Désolé, je n'ai pas bien entendu. Pouvez-vous répéter ?" 
+      reply: "Désolé, je suis un peu lent aujourd'hui. Pouvez-vous répéter ?" 
     };
   }
 };
 
+// --- GÉNÉRATION DU PLAN (Reste sur Gemini 3 Pro pour la qualité complexe) ---
 export const generateMealPlan = async (userContext: any, user: User): Promise<MealPlan> => {
   if (!process.env.API_KEY) throw new Error("API Key manquante");
   
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  const prompt = `GÉNÈRE UN PLAN DE 30 JOURS COMPLET.
-  Utilisateur : ${user.name}, ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.height || 170}cm, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
-  Contexte additionnel : ${JSON.stringify(userContext)}
   
-  RÈGLES STRICTES :
-  1. Calcule le BMR et ajuste chaque grammage.
-  2. Chaque recette doit avoir des quantités en GRAMMES.
-  3. Le plan doit durer exactement 30 jours.`;
+  // Schéma strict pour le plan final (ici on garde le JSON car la structure est complexe)
+  const MEAL_PLAN_SCHEMA = {
+    type: Type.OBJECT,
+    properties: {
+      days: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            day: { type: Type.INTEGER },
+            lunch: { type: Type.STRING },
+            dinner: { type: Type.STRING }
+          }
+        }
+      },
+      recipes: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            name: { type: Type.STRING },
+            ingredients: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: { item: { type: Type.STRING }, amount: { type: Type.STRING } }
+              }
+            },
+            steps: { type: Type.ARRAY, items: { type: Type.STRING } },
+            calories: { type: Type.INTEGER }
+          }
+        }
+      }
+    }
+  };
+
+  const prompt = `GÉNÈRE UN PLAN DE 30 JOURS.
+  Profil: ${user.gender}, ${user.age} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight}kg.
+  Objectif: Perte de poids saine.
+  Préférences détectées: ${JSON.stringify(userContext)}
+  
+  Règles: 30 jours complets, grammages précis en grammes, déficit calorique calculé.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-pro-preview', // Le modèle Pro est mieux pour générer du gros JSON valide
       contents: prompt,
       config: {
         responseMimeType: "application/json",
