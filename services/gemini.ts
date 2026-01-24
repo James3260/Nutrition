@@ -60,7 +60,8 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   `;
 
   // Construction de l'historique pour l'API
-  const contents = chatHistory.slice(-10).map(msg => ({
+  // On type explicitement contents pour accepter des parts hétérogènes (text ou inlineData)
+  const contents: { role: string, parts: any[] }[] = chatHistory.slice(-10).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
     parts: [{ text: msg.content || " " }]
   }));
