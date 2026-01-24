@@ -1,8 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { chatWithAI, tools } from '../services/gemini';
+import { chatWithAI, generateMealPlan } from '../services/gemini';
 import { MealPlan, User } from '../types';
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -11,6 +10,7 @@ interface Message {
     title: string;
     description: string;
     exampleMeals: string[];
+    startDate?: string;
   };
   timestamp?: Date;
 }
@@ -26,20 +26,18 @@ interface AssistantProps {
 const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, messages, setMessages }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // --- Live API (Simplifié pour focus Chat) ---
-  const [isLiveMode, setIsLiveMode] = useState(false);
 
   // Scroll automatique intelligent
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, isLoading]);
+  }, [messages.length, isLoading, isGeneratingPlan]);
 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || isGeneratingPlan) return;
 
     const userMsg = input;
     setInput('');
@@ -71,16 +69,50 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       setMessages(prev => [...prev, newAiMsg]);
 
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Désolé, une erreur est survenue. Veuillez réessayer.", timestamp: new Date() }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: "Désolé, une erreur technique est survenue.", timestamp: new Date() }]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleGeneratePlan = async (concept: any) => {
+    if (isGeneratingPlan) return;
+    setIsGeneratingPlan(true);
+
+    // Feedback visuel immédiat dans le chat
+    setMessages(prev => [...prev, { 
+      role: 'assistant', 
+      content: `Entendu ! Je génère votre programme "${concept.title}" pour commencer le ${concept.startDate || "dès que possible"}. Cela prend environ 15 secondes...`, 
+      timestamp: new Date() 
+    }]);
+
+    try {
+      // APPEL AU SERVICE GEMINI QUI RETOURNE LE JSON COMPLET
+      const plan = await generateMealPlan(concept, user);
+      
+      // MISE À JOUR DE L'ETAT GLOBAL DE L'APPLICATION
+      setMealPlan(plan);
+      
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "✅ C'est prêt ! J'ai mis à jour votre Agenda, vos Recettes et votre Liste de courses. Vous pouvez consulter les autres onglets.", 
+        timestamp: new Date() 
+      }]);
+    } catch (e) {
+      console.error(e);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "Oups, la génération a échoué. Veuillez réessayer.", 
+        timestamp: new Date() 
+      }]);
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
   const clearHistory = () => {
-    if(confirm("Effacer tout l'historique de conversation ?")) {
+    if(confirm("Effacer tout l'historique de conversation ? Cela ne supprimera pas votre plan actuel.")) {
       setMessages([]);
-      // Force un re-rendu immédiat du scroll
       setTimeout(() => setIsSidebarOpen(false), 100);
     }
   };
@@ -154,18 +186,18 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
            <div className="w-8"></div>
         </div>
 
-        {/* MESSAGES LIST - min-h-0 est CRUCIAL pour le scroll dans un flex child */}
+        {/* MESSAGES LIST */}
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6 custom-scrollbar scroll-smooth">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in duration-700">
                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">🤖</div>
                <h2 className="text-2xl font-black text-slate-800 mb-2">Comment puis-je vous aider ?</h2>
-               <p className="text-slate-400 max-w-xs mx-auto mb-8">Je peux analyser vos repas, calculer vos calories ou créer un programme complet.</p>
+               <p className="text-slate-400 max-w-xs mx-auto mb-8">Je peux créer un programme complet pour mars 2026, analyser vos repas ou calculer vos calories.</p>
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md w-full">
-                  <button onClick={() => setInput("Analyse mon poids actuel")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
-                     <span className="text-lg block mb-1">⚖️</span>
-                     <span className="text-xs font-bold text-slate-700">Mon suivi poids</span>
+                  <button onClick={() => setInput("Génère un programme pour Mars 2026")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
+                     <span className="text-lg block mb-1">📅</span>
+                     <span className="text-xs font-bold text-slate-700">Programme Mars 2026</span>
                   </button>
                   <button onClick={() => setInput("Suggère un dîner léger")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
                      <span className="text-lg block mb-1">🥗</span>
@@ -196,6 +228,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mt-2 animate-in slide-in-from-left-4">
                         <h4 className="font-black text-emerald-800 text-sm mb-1">{msg.concept.title}</h4>
                         <p className="text-emerald-700 text-xs mb-3">{msg.concept.description}</p>
+                        {msg.concept.startDate && (
+                          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3">Début : {msg.concept.startDate}</p>
+                        )}
                         <div className="space-y-1 mb-3">
                            {msg.concept.exampleMeals.map((meal, idx) => (
                              <div key={idx} className="flex items-center gap-2 text-xs text-emerald-600">
@@ -204,8 +239,23 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                              </div>
                            ))}
                         </div>
-                        <button className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-emerald-700 transition-colors">
-                           Générer ce programme
+                        <button 
+                          onClick={() => handleGeneratePlan(msg.concept)}
+                          disabled={isGeneratingPlan}
+                          className={`w-full py-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${
+                            isGeneratingPlan 
+                            ? 'bg-emerald-100 text-emerald-400 cursor-wait' 
+                            : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl active:scale-95'
+                          }`}
+                        >
+                           {isGeneratingPlan ? (
+                             <>
+                               <span className="w-3 h-3 border-2 border-emerald-400 border-t-emerald-600 rounded-full animate-spin"></span>
+                               Génération en cours...
+                             </>
+                           ) : (
+                             <>✨ Générer ce programme</>
+                           )}
                         </button>
                      </div>
                    )}
@@ -224,7 +274,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             ))
           )}
           
-          {isLoading && (
+          {(isLoading || isGeneratingPlan) && (
             <div className="flex gap-4">
                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs shrink-0 mt-1">✨</div>
                <div className="bg-white border border-slate-100 px-4 py-3 rounded-2xl rounded-tl-none shadow-sm flex gap-1 items-center">
@@ -237,7 +287,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
           <div ref={messagesEndRef} className="h-4" />
         </div>
 
-        {/* INPUT AREA - Fixe en bas */}
+        {/* INPUT AREA */}
         <div className="p-4 border-t border-slate-100 bg-white shrink-0 z-20">
           <div className="max-w-3xl mx-auto relative">
              <form onSubmit={handleTextSubmit} className="relative flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-3xl p-2 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
@@ -250,10 +300,10 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                 />
                 <button 
                   type="submit" 
-                  disabled={!input.trim() || isLoading}
+                  disabled={!input.trim() || isLoading || isGeneratingPlan}
                   className={`
                     p-3 rounded-2xl flex items-center justify-center transition-all duration-200
-                    ${input.trim() && !isLoading 
+                    ${input.trim() && !isLoading && !isGeneratingPlan
                       ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-500 transform hover:scale-105' 
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
                   `}
@@ -263,9 +313,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                    </svg>
                 </button>
              </form>
-             <p className="text-center text-[10px] text-slate-300 mt-2">
-                Crystal AI peut faire des erreurs. Vérifiez les informations médicales.
-             </p>
           </div>
         </div>
 
