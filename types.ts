@@ -10,13 +10,14 @@ export interface Recipe {
   ingredients: Ingredient[];
   steps: string[];
   calories: number;
+  totalWeight?: string; // Nouveau : Poids total de l'assiette (ex: "450g")
 }
 
 export interface DayPlan {
   day: number;
-  breakfast?: string; // Nouveau
+  breakfast?: string;
   lunch: string;
-  snack?: string;     // Nouveau (Dessert/Collation)
+  snack?: string;
   dinner: string;
 }
 

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MealPlan, User } from '../types';
 
 interface RecipeListProps {
@@ -11,19 +11,30 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [isCookingMode, setIsCookingMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(new Set());
+
+  // Reset des ingrédients cochés quand on change de recette
+  React.useEffect(() => {
+    setCheckedIngredients(new Set());
+  }, [selectedRecipeId]);
 
   if (!mealPlan) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 sm:py-32 bg-white rounded-[2rem] md:rounded-[3rem] border-2 border-dashed border-slate-200 px-6 text-center">
-        <div className="text-5xl sm:text-6xl mb-6 float">📖</div>
-        <p className="text-slate-800 font-black text-lg sm:text-xl">Livre de recettes vide</p>
-        <p className="text-slate-400 text-[10px] sm:text-sm mt-2 max-w-xs leading-relaxed">Votre assistant IA générera vos recettes sur-mesure ici une fois votre programme activé.</p>
+      <div className="flex flex-col items-center justify-center py-24 sm:py-32 bg-white rounded-[2rem] md:rounded-[3rem] border-2 border-dashed border-slate-200 px-6 text-center animate-in fade-in zoom-in-95 duration-700">
+        <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6 shadow-inner text-5xl">👨‍🍳</div>
+        <h2 className="text-slate-900 font-black text-xl sm:text-2xl mb-2">Le Livre de Recettes est vide</h2>
+        <p className="text-slate-400 text-xs sm:text-sm max-w-xs mx-auto leading-relaxed">
+          Générez votre programme avec l'assistant pour débloquer vos fiches cuisine gastronomiques.
+        </p>
       </div>
     );
   }
 
   const recipes = mealPlan.recipes;
   const selectedRecipe = recipes.find(r => r.id === selectedRecipeId);
+
+  // Estimation du temps de cuisine (5 min par étape + 10 min prep base)
+  const estimatedTime = selectedRecipe ? 10 + (selectedRecipe.steps.length * 5) : 0;
 
   const startCooking = () => {
     setIsCookingMode(true);
@@ -42,72 +53,90 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
     if (currentStep > 0) setCurrentStep(c => c - 1);
   };
 
+  const toggleIngredient = (idx: number) => {
+    const key = `${selectedRecipeId}-${idx}`;
+    const newSet = new Set(checkedIngredients);
+    if (newSet.has(key)) newSet.delete(key);
+    else newSet.add(key);
+    setCheckedIngredients(newSet);
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 animate-in fade-in duration-500 pb-10">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 animate-in fade-in duration-500 pb-10 h-[calc(100vh-140px)] min-h-[600px]">
       
-      {/* Mode Cuisine Immersive Overlay */}
+      {/* --- MODE CUISINE IMMERSIF (PLEIN ÉCRAN) --- */}
       {isCookingMode && selectedRecipe && (
         <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col animate-in zoom-in-95 duration-300">
           {/* Progress Bar */}
           <div className="w-full h-2 bg-slate-800">
             <div 
-              className="h-full bg-emerald-500 transition-all duration-500 ease-out" 
+              className="h-full bg-emerald-500 transition-all duration-500 ease-out shadow-[0_0_15px_rgba(16,185,129,0.5)]" 
               style={{ width: `${((currentStep + 1) / selectedRecipe.steps.length) * 100}%` }}
             ></div>
           </div>
 
           {/* Header */}
-          <div className="px-6 py-6 flex justify-between items-center text-white shrink-0">
+          <div className="px-6 py-6 flex justify-between items-center text-white shrink-0 bg-slate-900/50 backdrop-blur-md border-b border-white/5">
             <div>
-              <h2 className="text-lg font-black tracking-tight">{selectedRecipe.name}</h2>
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-                Étape {currentStep + 1} sur {selectedRecipe.steps.length}
+              <h2 className="text-lg font-black tracking-tight text-emerald-400">{selectedRecipe.name}</h2>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-1">
+                Étape {currentStep + 1} <span className="text-slate-600 mx-1">/</span> {selectedRecipe.steps.length}
               </p>
             </div>
             <button 
               onClick={() => setIsCookingMode(false)}
-              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition-all"
             >
               ✕
             </button>
           </div>
 
           {/* Content */}
-          <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 max-w-4xl mx-auto w-full">
-            <div className="space-y-8">
-               <span className="inline-block px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-black uppercase tracking-widest mb-4">
-                 Action
-               </span>
-               <p className="text-2xl sm:text-4xl md:text-5xl font-bold text-white leading-tight">
+          <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 max-w-4xl mx-auto w-full overflow-y-auto">
+            <div className="space-y-8 py-10">
+               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-black uppercase tracking-widest mb-4">
+                 <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                 Action en cours
+               </div>
+               
+               <p className="text-2xl sm:text-4xl md:text-5xl font-medium text-white leading-tight">
                  {selectedRecipe.steps[currentStep]}
                </p>
                
-               {/* Ingredients helper for current step (mockup logic) */}
-               <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mb-3 font-bold">Ingrédients Rappel</p>
+               {/* Ingredients helper for current step */}
+               <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
+                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mb-4 font-bold flex items-center gap-2">
+                    <span>💡</span> Ingrédients Utiles
+                 </p>
                  <div className="flex flex-wrap gap-2">
-                   {selectedRecipe.ingredients.map((ing, i) => (
-                     <span key={i} className={`text-xs px-3 py-1.5 rounded-lg border ${selectedRecipe.steps[currentStep].toLowerCase().includes(ing.item.toLowerCase().split(' ')[0]) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-transparent text-slate-500 border-slate-700'}`}>
-                       {ing.amount} {ing.item}
-                     </span>
-                   ))}
+                   {selectedRecipe.ingredients.map((ing, i) => {
+                     const isRelevant = selectedRecipe.steps[currentStep].toLowerCase().includes(ing.item.toLowerCase().split(' ')[0]);
+                     return (
+                       <span key={i} className={`text-xs px-3 py-2 rounded-xl border transition-all ${isRelevant ? 'bg-emerald-500 text-white border-emerald-500 font-bold shadow-lg shadow-emerald-900/20' : 'bg-transparent text-slate-500 border-slate-700 opacity-50'}`}>
+                         {ing.amount} {ing.item}
+                       </span>
+                     );
+                   })}
                  </div>
                </div>
             </div>
           </div>
 
           {/* Controls */}
-          <div className="p-6 sm:p-10 bg-slate-800/50 backdrop-blur-md border-t border-white/5 flex gap-4 shrink-0">
+          <div className="p-6 sm:p-10 bg-slate-800/80 backdrop-blur-xl border-t border-white/5 flex gap-4 shrink-0 pb-safe">
             <button 
               onClick={prevStep}
               disabled={currentStep === 0}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center disabled:opacity-20 transition-all"
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center disabled:opacity-20 transition-all active:scale-95"
             >
-              ←
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             </button>
             <button 
               onClick={nextStep}
-              className="flex-1 h-16 sm:h-20 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-black text-lg sm:text-xl uppercase tracking-widest shadow-xl shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-3"
+              className="flex-1 h-16 sm:h-20 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm sm:text-lg uppercase tracking-widest shadow-xl shadow-emerald-900/30 transition-all active:scale-95 flex items-center justify-center gap-3"
             >
               {currentStep === selectedRecipe.steps.length - 1 ? 'Terminer ! 🎉' : 'Étape Suivante →'}
             </button>
@@ -115,118 +144,189 @@ const RecipeList: React.FC<RecipeListProps> = ({ mealPlan, user }) => {
         </div>
       )}
 
-      {/* Sidebar List - Horizontale sur mobile, Verticale sur Desktop */}
-      <div className="lg:col-span-4 space-y-4 sm:space-y-6">
-        <div className="bg-slate-900 p-6 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] text-white shadow-xl">
-           <h2 className="text-lg sm:text-xl font-black flex items-center gap-3">
-             <span className="text-xl sm:text-2xl">👩‍🍳</span> Mes Assiettes
+      {/* --- SIDEBAR LISTE DES RECETTES --- */}
+      <div className="lg:col-span-4 flex flex-col h-full min-h-0 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-6 sm:p-8 bg-slate-50 border-b border-slate-100 shrink-0">
+           <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
+             <span className="text-2xl">🔪</span> Mes Recettes
            </h2>
-           <p className="text-[8px] sm:text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mt-2">Grammages personnalisés</p>
+           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-2">
+             {recipes.length} plats générés
+           </p>
         </div>
         
-        <div className="flex lg:block gap-3 overflow-x-auto lg:overflow-y-auto lg:max-h-[65vh] pb-4 lg:pb-0 lg:pr-2 no-scrollbar snap-x snap-mandatory">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {recipes.map((recipe) => (
             <button
               key={recipe.id}
               onClick={() => setSelectedRecipeId(recipe.id)}
-              className={`min-w-[260px] sm:min-w-[300px] lg:min-w-0 lg:w-full text-left p-4 sm:p-5 rounded-[1.5rem] lg:rounded-3xl transition-all flex items-center gap-4 border-2 shrink-0 snap-center mb-0 lg:mb-4 ${
+              className={`w-full text-left p-4 rounded-2xl transition-all duration-300 flex items-center gap-4 border-2 group relative overflow-hidden ${
                 selectedRecipeId === recipe.id 
-                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-xl lg:translate-x-2' 
-                  : 'bg-white border-white text-slate-600 hover:border-slate-100 shadow-sm'
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-[1.02]' 
+                  : 'bg-white border-slate-50 text-slate-600 hover:border-emerald-100 hover:bg-emerald-50/30'
               }`}
             >
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center text-lg shrink-0 transition-transform ${selectedRecipeId === recipe.id ? 'bg-white/20 rotate-6' : 'bg-slate-50'}`}>🥗</div>
-              <div className="flex-1 min-w-0">
-                <p className="font-black text-xs sm:text-sm leading-tight truncate uppercase tracking-tight">{recipe.name}</p>
-                <p className={`text-[8px] sm:text-[10px] font-bold mt-1 ${selectedRecipeId === recipe.id ? 'text-white/80' : 'text-slate-400'}`}>
-                  {recipe.calories} kcal • {recipe.ingredients.length} ingr.
-                </p>
+              {/* Petite barre latérale active */}
+              {selectedRecipeId === recipe.id && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500"></div>}
+
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition-all ${
+                selectedRecipeId === recipe.id ? 'bg-white/10 text-emerald-400' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-sm'
+              }`}>
+                🥗
               </div>
+              <div className="flex-1 min-w-0 z-10">
+                <p className={`font-black text-sm leading-tight truncate ${selectedRecipeId === recipe.id ? 'text-white' : 'text-slate-800'}`}>
+                  {recipe.name}
+                </p>
+                <div className="flex items-center gap-2 mt-1.5 opacity-80">
+                  <span className="text-[10px] font-bold flex items-center gap-1">
+                    🔥 {recipe.calories}
+                  </span>
+                  {recipe.totalWeight && (
+                     <>
+                     <span className="text-[8px]">•</span>
+                     <span className="text-[10px] font-bold">⚖️ {recipe.totalWeight}</span>
+                     </>
+                  )}
+                </div>
+              </div>
+              
+              {selectedRecipeId === recipe.id && (
+                <div className="text-emerald-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                </div>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Detail View */}
-      <div className="lg:col-span-8">
+      {/* --- VUE DÉTAILLÉE --- */}
+      <div className="lg:col-span-8 h-full flex flex-col min-h-0">
         {selectedRecipe ? (
-          <div className="bg-white rounded-[2rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden min-h-[500px] sm:min-h-[700px] animate-in slide-in-from-right-10 duration-500 relative">
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden flex flex-col h-full animate-in slide-in-from-right-8 duration-500 relative">
             
-            {/* Start Cooking Floating Button (Mobile friendly) */}
-            <div className="absolute top-6 right-6 z-20">
+            {/* Header Artistique */}
+            <div className="relative h-64 sm:h-72 bg-slate-900 shrink-0 overflow-hidden">
+               {/* Background Gradients */}
+               <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-900"></div>
+               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[100px] -mr-32 -mt-32 animate-pulse"></div>
+               <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/10 rounded-full blur-[80px] -ml-20 -mb-20"></div>
+
+               {/* Content */}
+               <div className="absolute inset-0 p-8 sm:p-10 flex flex-col justify-end z-10">
+                  <div className="flex flex-wrap gap-2 mb-4">
+                     <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white text-[10px] font-black uppercase tracking-widest shadow-sm">
+                       ⏱️ ~{estimatedTime} min
+                     </span>
+                     <span className="px-3 py-1 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase tracking-widest shadow-sm">
+                       🔥 {selectedRecipe.calories} kcal
+                     </span>
+                     {selectedRecipe.totalWeight && (
+                       <span className="px-3 py-1 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase tracking-widest shadow-sm">
+                         ⚖️ {selectedRecipe.totalWeight}
+                       </span>
+                     )}
+                  </div>
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight drop-shadow-lg max-w-3xl">
+                    {selectedRecipe.name}
+                  </h1>
+               </div>
+
+               {/* Action Button Floating */}
                <button 
                  onClick={startCooking}
-                 className="bg-white/20 backdrop-blur-md hover:bg-white text-white hover:text-emerald-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-white/40 shadow-xl transition-all flex items-center gap-2"
+                 className="absolute bottom-8 right-8 bg-emerald-500 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-emerald-500/40 hover:bg-emerald-400 hover:scale-105 transition-all flex items-center gap-2 group z-20"
                >
-                 <span>👨‍🍳</span> Cuisiner
+                 <span>🔥</span> Mode Chef
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                </button>
             </div>
-
-            <div className="min-h-[160px] sm:h-60 bg-gradient-to-br from-emerald-500 to-teal-700 p-6 sm:p-10 flex items-end relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-              <div className="relative z-10 w-full">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
-                  <span className="bg-white/20 backdrop-blur-md text-white text-[7px] sm:text-[9px] font-black px-2 sm:px-3 py-1 sm:py-1.5 rounded-full uppercase tracking-widest border border-white/30">Ratio Perte de Poids</span>
-                  <span className="text-white/80 font-bold text-[8px] sm:text-xs">{selectedRecipe.calories} kcal par portion</span>
-                </div>
-                <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white leading-tight drop-shadow-sm w-[80%]">{selectedRecipe.name}</h1>
-              </div>
-            </div>
             
-            <div className="p-6 sm:p-10">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 lg:gap-12">
-                {/* Ingredients */}
-                <div className="space-y-6 sm:space-y-8">
-                  <div className="flex items-center gap-4">
-                    <span className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center font-black text-sm sm:text-base shadow-inner">1</span>
-                    <h3 className="text-sm sm:text-lg font-black text-slate-800 uppercase tracking-widest">Ingrédients</h3>
-                  </div>
+            {/* Scrollable Content Body */}
+            <div className="flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+                
+                {/* Colonne Ingrédients (Gauche) */}
+                <div className="xl:col-span-5 space-y-6">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <span className="text-lg">🛒</span> Ingrédients ({selectedRecipe.ingredients.length})
+                  </h3>
                   
-                  <div className="space-y-2">
-                    {selectedRecipe.ingredients.map((ing, i) => (
-                      <div key={i} className="flex justify-between items-center p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-colors group">
-                        <span className="text-xs sm:text-sm font-bold text-slate-600 capitalize group-hover:text-slate-900 truncate pr-4">{ing.item}</span>
-                        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                          <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Poids :</span>
-                          <span className="text-[10px] sm:text-sm font-black text-emerald-600 bg-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-emerald-100 shadow-sm">{ing.amount}</span>
+                  <div className="space-y-3">
+                    {selectedRecipe.ingredients.map((ing, i) => {
+                      const isChecked = checkedIngredients.has(`${selectedRecipe.id}-${i}`);
+                      return (
+                        <div 
+                          key={i} 
+                          onClick={() => toggleIngredient(i)}
+                          className={`flex items-center gap-4 p-3 rounded-xl border-2 transition-all cursor-pointer group ${
+                            isChecked 
+                              ? 'bg-slate-50 border-slate-100 opacity-50' 
+                              : 'bg-white border-slate-50 hover:border-emerald-200 hover:bg-emerald-50/20'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                            isChecked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'
+                          }`}>
+                            {isChecked && <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`text-sm font-bold truncate ${isChecked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{ing.item}</p>
+                            <p className="text-[10px] font-black text-emerald-600">{ing.amount}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Steps */}
-                <div className="space-y-6 sm:space-y-8">
-                  <div className="flex items-center gap-4">
-                    <span className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-black text-sm sm:text-base shadow-inner">2</span>
-                    <h3 className="text-sm sm:text-lg font-black text-slate-800 uppercase tracking-widest">Préparation</h3>
-                  </div>
+                {/* Colonne Préparation (Droite) */}
+                <div className="xl:col-span-7 space-y-6">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <span className="text-lg">👨‍🍳</span> Préparation ({selectedRecipe.steps.length} étapes)
+                  </h3>
 
-                  <div className="relative pl-6 sm:pl-8 space-y-6 sm:space-y-8 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                  <div className="relative pl-4 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
                     {selectedRecipe.steps.map((step, i) => (
-                      <div key={i} className="relative group">
-                        <div className="absolute -left-[1.75rem] sm:-left-[2.15rem] top-1.5 w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 rounded-full border-2 border-white bg-slate-900 group-hover:bg-emerald-500 transition-colors z-10 shadow-sm"></div>
-                        <div className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
-                          <span className="block text-[8px] sm:text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Étape {i + 1}</span>
-                          {step}
+                      <div key={i} className="relative pl-8 group">
+                        {/* Timeline dot */}
+                        <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-white border-4 border-slate-100 group-hover:border-emerald-400 transition-colors z-10 flex items-center justify-center">
+                           <div className="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-emerald-500 transition-colors"></div>
                         </div>
+                        
+                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">
+                          Étape {i + 1}
+                        </span>
+                        <p className="text-slate-600 font-medium leading-relaxed text-sm group-hover:text-slate-900 transition-colors">
+                          {step}
+                        </p>
                       </div>
                     ))}
                   </div>
-                  
-                  <button onClick={startCooking} className="w-full py-4 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all flex items-center justify-center gap-2">
-                     <span>🔥</span> Lancer le mode Cuisine
-                  </button>
+
+                  {/* Bouton bas de page */}
+                  <div className="pt-6">
+                    <button onClick={startCooking} className="w-full py-4 rounded-xl border-2 border-slate-900 text-slate-900 font-black text-xs uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">
+                       Lancer la cuisine immersive
+                    </button>
+                  </div>
                 </div>
+
               </div>
             </div>
           </div>
         ) : (
-          <div className="h-full min-h-[400px] sm:min-h-[700px] flex flex-col items-center justify-center bg-white rounded-[2rem] sm:rounded-[3rem] border-2 border-dashed border-slate-200 text-slate-300 px-6 text-center animate-in fade-in duration-1000">
-            <div className="w-20 h-20 sm:w-32 sm:h-32 bg-slate-50 rounded-[1.5rem] sm:rounded-[2.5rem] flex items-center justify-center mb-6 shadow-sm opacity-50 group">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 sm:h-16 sm:w-16 opacity-10 group-hover:opacity-30 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+          <div className="h-full flex flex-col items-center justify-center bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-10 text-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/food.png')] opacity-5"></div>
+            
+            <div className="relative z-10 transform group-hover:scale-105 transition-transform duration-500">
+              <div className="w-32 h-32 bg-slate-50 rounded-[2rem] flex items-center justify-center mb-8 mx-auto shadow-inner">
+                <span className="text-6xl opacity-30 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500">🥗</span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 mb-2">Sélectionnez une recette</h3>
+              <p className="text-slate-400 text-sm max-w-xs mx-auto">Choisissez un plat dans le menu de gauche pour afficher les détails, les ingrédients et le mode cuisine.</p>
             </div>
-            <p className="font-black uppercase tracking-[0.3em] text-[8px] sm:text-xs text-slate-400">Sélectionnez une assiette</p>
           </div>
         )}
       </div>

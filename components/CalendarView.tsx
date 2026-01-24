@@ -224,6 +224,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
                           <span className="text-[8px] sm:text-[11px] text-slate-400 font-bold">{recipe.ingredients.length} ingr.</span>
                           </>
                         )}
+                        {recipe?.totalWeight && (
+                           <>
+                           <span className="text-[8px] sm:text-[11px] text-slate-300 hidden sm:inline">•</span>
+                           <span className="text-[8px] sm:text-[11px] text-slate-500 font-black bg-slate-100 px-1.5 py-0.5 rounded">⚖️ {recipe.totalWeight}</span>
+                           </>
+                        )}
                       </div>
                     </div>
                   </div>

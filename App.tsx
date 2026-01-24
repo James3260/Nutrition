@@ -23,7 +23,13 @@ interface Message {
     title: string;
     description: string;
     startDate?: string; // Ajout de la date de début
-    weeklyPreview?: { day: number, lunch: string, dinner: string }[]; // Ajout du semainier
+    weeklyPreview?: { 
+      day: number, 
+      breakfast?: string, breakfastWeight?: string,
+      lunch: string, lunchWeight: string, 
+      snack?: string, snackWeight?: string,
+      dinner: string, dinnerWeight: string 
+    }[]; // Ajout du semainier avec poids
   };
   timestamp?: Date;
 }

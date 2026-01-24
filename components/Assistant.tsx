@@ -11,7 +11,13 @@ interface Message {
     title: string;
     description: string;
     startDate?: string;
-    weeklyPreview?: { day: number, breakfast?: string, lunch: string, snack?: string, dinner: string }[];
+    weeklyPreview?: { 
+      day: number, 
+      breakfast?: string, breakfastWeight?: string,
+      lunch: string, lunchWeight: string, 
+      snack?: string, snackWeight?: string,
+      dinner: string, dinnerWeight: string 
+    }[];
   };
   timestamp?: Date;
 }
@@ -396,7 +402,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                                          <div className="flex items-start gap-2">
                                             <span className="text-amber-400 text-sm mt-0.5">🥐</span>
                                             <div>
-                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Matin</span>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                                                Matin {day.breakfastWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.breakfastWeight})</span>}
+                                              </span>
                                               <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.breakfast}</span>
                                             </div>
                                          </div>
@@ -406,7 +414,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                                        <div className="flex items-start gap-2">
                                           <span className="text-amber-500 text-sm mt-0.5">☀️</span>
                                           <div>
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Midi</span>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                                              Midi {day.lunchWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.lunchWeight})</span>}
+                                            </span>
                                             <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.lunch}</span>
                                           </div>
                                        </div>
@@ -416,7 +426,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                                          <div className="flex items-start gap-2">
                                             <span className="text-pink-400 text-sm mt-0.5">🍎</span>
                                             <div>
-                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Collation</span>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                                                Collation {day.snackWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.snackWeight})</span>}
+                                              </span>
                                               <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.snack}</span>
                                             </div>
                                          </div>
@@ -426,7 +438,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                                        <div className="flex items-start gap-2">
                                           <span className="text-indigo-500 text-sm mt-0.5">🌙</span>
                                           <div>
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Soir</span>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                                              Soir {day.dinnerWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.dinnerWeight})</span>}
+                                            </span>
                                             <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.dinner}</span>
                                           </div>
                                        </div>

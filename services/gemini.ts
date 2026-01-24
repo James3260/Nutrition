@@ -23,26 +23,30 @@ export const updateUserTool: FunctionDeclaration = {
 
 export const proposeConceptTool: FunctionDeclaration = {
   name: "propose_meal_plan_concept",
-  description: "Propose un SEMAINIER TYPE (7 jours) complet pour validation. DOIT inclure la startDate et les préférences repas (ptit dej/collation).",
+  description: "Génère la structure visuelle du plan repas. À utiliser DÈS QUE l'utilisateur demande des repas, un menu ou un planning.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: "Titre accrocheur du plan" },
-      description: { type: Type.STRING, description: "Description courte de la stratégie" },
-      startDate: { type: Type.STRING, description: "Date de début CONFIRMÉE par l'utilisateur (YYYY-MM-DD)." },
+      title: { type: Type.STRING, description: "Titre du plan (ex: 'Challenge 20€ - 7 Repas')" },
+      description: { type: Type.STRING, description: "Description de la stratégie, du budget total estimé et des astuces." },
+      startDate: { type: Type.STRING, description: "Date de début (Si non précisée, mettre la date de demain)." },
       weeklyPreview: { 
         type: Type.ARRAY, 
-        description: "Menu type pour les 7 premiers jours.",
+        description: "Menu type détaillé.",
         items: {
           type: Type.OBJECT,
           properties: {
             day: { type: Type.INTEGER, description: "Numéro du jour (1 à 7)" },
-            breakfast: { type: Type.STRING, description: "Petit-déjeuner (si demandé)" },
+            breakfast: { type: Type.STRING, description: "Petit-déjeuner" },
+            breakfastWeight: { type: Type.STRING, description: "Poids portion (ex: '300g')" },
             lunch: { type: Type.STRING, description: "Déjeuner" },
-            snack: { type: Type.STRING, description: "Collation / Dessert (si demandé)" },
-            dinner: { type: Type.STRING, description: "Dîner" }
+            lunchWeight: { type: Type.STRING, description: "Poids portion (ex: '450g')" },
+            snack: { type: Type.STRING, description: "Collation" },
+            snackWeight: { type: Type.STRING, description: "Poids portion (ex: '150g')" },
+            dinner: { type: Type.STRING, description: "Dîner" },
+            dinnerWeight: { type: Type.STRING, description: "Poids portion (ex: '350g')" }
           },
-          required: ["day", "lunch", "dinner"] // Breakfast et Snack sont optionnels techniquement, mais l'IA doit les remplir si demandé
+          required: ["day", "lunch", "lunchWeight", "dinner", "dinnerWeight"] 
         }
       }
     },
@@ -52,7 +56,7 @@ export const proposeConceptTool: FunctionDeclaration = {
 
 export const logWorkoutTool: FunctionDeclaration = {
   name: "log_workout",
-  description: "Enregistre une séance de sport dans l'onglet Activité.",
+  description: "Enregistre une séance de sport.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -67,7 +71,7 @@ export const logWorkoutTool: FunctionDeclaration = {
 
 export const logHydrationTool: FunctionDeclaration = {
   name: "log_hydration",
-  description: "Enregistre un apport en eau dans le Dashboard.",
+  description: "Enregistre de l'eau bue.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -79,13 +83,13 @@ export const logHydrationTool: FunctionDeclaration = {
 
 export const logMealTool: FunctionDeclaration = {
   name: "log_meal",
-  description: "Enregistre un repas consommé (via texte ou analyse photo) dans le Dashboard.",
+  description: "Enregistre un repas mangé.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      name: { type: Type.STRING, description: "Nom du plat identifié" },
-      calories: { type: Type.NUMBER, description: "Estimation calorique totale" },
-      mealType: { type: Type.STRING, enum: ["breakfast", "lunch", "dinner", "snack"], description: "Type de repas" }
+      name: { type: Type.STRING, description: "Nom du plat" },
+      calories: { type: Type.NUMBER, description: "Calories" },
+      mealType: { type: Type.STRING, enum: ["breakfast", "lunch", "dinner", "snack"], description: "Type" }
     },
     required: ["name", "calories", "mealType"]
   }
@@ -112,51 +116,43 @@ export const chatWithAI = async (
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = 'gemini-2.5-flash'; 
+  const modelName = 'gemini-3-pro-preview'; 
 
-  // Construction d'un contexte "Temps Réel" pour l'IA
   const contextStr = context ? `
-  ÉTAT DU JOUR (Temps Réel) :
-  - Hydratation : ${context.hydrationCurrent}ml / ${context.hydrationGoal}ml.
-  - Calories mangées (confirmées) : ${context.caloriesEaten} kcal.
-  - Calories brûlées (sport) : ${context.caloriesBurned} kcal.
+  STATS LIVE:
+  - Eau: ${context.hydrationCurrent}/${context.hydrationGoal}ml.
+  - Cal. Mangées: ${context.caloriesEaten}.
+  - Cal. Brûlées: ${context.caloriesBurned}.
   ` : '';
 
   const todayDate = new Date().toISOString().split('T')[0];
+  const tomorrowDate = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-  const systemInstruction = `Tu es Crystal, une IA nutritionniste de luxe.
-  DATE D'AUJOURD'HUI : ${todayDate}.
+  // INSTRUCTIONS SYSTÈME : DÉBRIDAGE TOTAL
+  const systemInstruction = `Tu es Crystal, une IA experte absolue en Nutrition, Cuisine et Budget.
   
-  CONTEXTE UTILISATEUR :
-  Nom: ${user.name}.
-  Poids: ${user.weightHistory?.[user.weightHistory.length-1]?.weight || '?'}kg.
+  TES DIRECTIVES PRIORITAIRES (LIBERTÉ TOTALE) :
+  1. TU ES "CAPABLE" DE TOUT : Ne dis jamais "je ne comprends pas" ou "hors de mes compétences". Tu sais gérer les budgets (ex: 20€/semaine), les régimes complexes, tout.
+  2. SOIS PROACTIVE ET INTELLIGENTE :
+     - Si l'utilisateur demande "7 repas pour 20€", NE DEMANDE PAS LA DATE. Prends l'initiative : suppose que ça commence DEMAIN (${tomorrowDate}) et génère le plan TOUT DE SUITE.
+     - Si l'utilisateur ne précise pas s'il veut un petit-déj, décide pour lui (ex: propose-le ou non selon le budget).
+     - Remplis les vides toi-même. L'utilisateur veut un résultat, pas un interrogatoire.
+  3. GESTION DU BUDGET (CRITIQUE) :
+     - Si on te donne un prix (ex: 20€), tu DOIS le respecter. Utilise des ingrédients low-cost (oeufs, riz, haricots, surgelés).
+     - Fais des plans "Batch Cooking" ou "Restes" pour économiser.
+  4. UTILISATION DES OUTILS :
+     - Dès qu'il est question de manger, de plan ou de menu : UTILISE L'OUTIL 'propose_meal_plan_concept' IMMÉDIATEMENT. C'est ta façon de répondre.
+     - Dans 'weeklyPreview', mets les repas. Si le budget est serré, tu peux répéter le même repas le midi et le soir (C'est économique).
+
+  PROFIL UTILISATEUR :
+  ${user.name}, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 'Poids inconnu'}kg.
   ${contextStr}
-  
-  PROCÉDURE DE PLANIFICATION (OBLIGATOIRE) :
-  1. Si l'utilisateur demande un plan, TU DOIS D'ABORD POSER DES QUESTIONS DE PRÉFÉRENCES :
-     - "À partir de quelle date souhaitez-vous commencer ?" (Si pas déjà donnée)
-     - "Souhaitez-vous inclure le PETIT-DÉJEUNER ?"
-     - "Souhaitez-vous une COLLATION ou un DESSERT ?"
-     
-     -> NE PROPOSE PAS DE PLAN TANT QUE TU N'AS PAS CES RÉPONSES (Sauf si l'utilisateur a été explicite dès le début).
-  
-  2. Une fois les préférences claires :
-     -> UTILISE 'propose_meal_plan_concept'.
-     -> Remplis le champ 'weeklyPreview' avec TOUS les repas demandés (Breakfast?, Lunch, Snack?, Dinner).
-     -> Assure-toi que les noms des plats sont appétissants mais concis.
-  
-  3. L'utilisateur doit valider le concept. Ensuite, l'app générera le mois complet.
+  DATE AUJOURD'HUI : ${todayDate}.
 
-  TES AUTRES POUVOIRS :
-  1. ANALYSE VISUELLE : Si l'utilisateur envoie une image de nourriture, analyse-la, estime les calories et UTILISE 'log_meal'.
-  2. Si l'utilisateur dit "J'ai couru 10min", UTILISE 'log_workout'.
-  3. Si l'utilisateur dit "J'ai bu un verre d'eau", UTILISE 'log_hydration'.
-
-  TON TON :
-  - Sois proactive, précise et élégante.
+  Si l'input est "7 repas pour 20€", ta réponse DOIT être un appel de fonction 'propose_meal_plan_concept' avec un plan optimisé économiquement. Pas de blabla inutile avant.
   `;
 
-  const contents: { role: string, parts: any[] }[] = chatHistory.slice(-10).map(msg => {
+  const contents: { role: string, parts: any[] }[] = chatHistory.slice(-15).map(msg => {
     return {
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content || " " }]
@@ -174,7 +170,7 @@ export const chatWithAI = async (
         data: input.imageBase64 
       } 
     });
-    currentParts.push({ text: input.text || "Analyse cette image nutritionnellement et enregistre le repas." });
+    currentParts.push({ text: input.text || "Analyse cette image." });
   }
   
   contents.push({ role: 'user', parts: currentParts });
@@ -186,7 +182,7 @@ export const chatWithAI = async (
       config: {
         systemInstruction,
         tools: tools,
-        temperature: 0.7,
+        temperature: 0.6, // Créativité augmentée pour trouver des solutions
       },
     });
 
@@ -223,18 +219,17 @@ export const chatWithAI = async (
       }
     }
 
+    // Fallback message intelligent
     if (!result.reply || result.reply.trim().length === 0) {
-      if (result.actionLog.length > 0) {
+      if (result.suggestedConcept) {
+        result.reply = `Challenge accepté ! Voici un plan optimisé pour votre budget : "${result.suggestedConcept.title}". J'ai sélectionné des ingrédients économiques et nutritifs. Cliquez pour voir le détail et les quantités.`;
+      } else if (result.actionLog.length > 0) {
          const type = result.actionLog[0].type;
-         if (type === 'workout') result.reply = "Séance enregistrée ! 💪 Excellente activité.";
-         if (type === 'hydration') result.reply = "Hydratation ajoutée. 💧";
-         if (type === 'meal') result.reply = `Repas enregistré : ${result.actionLog[0].data.name} (${result.actionLog[0].data.calories} kcal). 🍽️`;
-      } else if (Object.keys(result.extractedInfo).length > 0) {
-        result.reply = `Profil mis à jour.`;
-      } else if (result.suggestedConcept) {
-        result.reply = `J'ai préparé une structure pour le ${result.suggestedConcept.startDate}. Prenez le temps de lire le menu ci-dessus (cliquez pour voir tout le texte si besoin). On valide ?`;
+         if (type === 'workout') result.reply = "Sport enregistré !";
+         if (type === 'hydration') result.reply = "Hydratation notée.";
+         if (type === 'meal') result.reply = "Repas ajouté.";
       } else {
-        result.reply = "Je vous écoute.";
+        result.reply = "C'est noté.";
       }
     }
 
@@ -243,7 +238,7 @@ export const chatWithAI = async (
   } catch (error) {
     console.error("Chat error:", error);
     return { 
-      reply: "Je rencontre une difficulté technique momentanée. Pouvez-vous reformuler ?" 
+      reply: "Je suis prête à relever le défi, mais j'ai eu un petit hoquet technique. Répétez votre demande s'il vous plaît." 
     };
   }
 };
@@ -276,6 +271,7 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
           properties: {
             id: { type: Type.STRING },
             name: { type: Type.STRING },
+            totalWeight: { type: Type.STRING, description: "Poids total de l'assiette en grammes (ex: '400g')" },
             ingredients: {
               type: Type.ARRAY,
               items: {
@@ -293,36 +289,33 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
 
   const startDate = concept.startDate || new Date().toISOString().split('T')[0];
 
-  // On formate le preview pour le prompt avec TOUS les champs
+  // Construction du prompt de génération
   let previewStr = "";
   if (concept.weeklyPreview && Array.isArray(concept.weeklyPreview)) {
     previewStr = concept.weeklyPreview.map((d: any) => {
         let dayStr = `Jour ${d.day}: `;
-        if (d.breakfast) dayStr += `Matin=${d.breakfast}, `;
-        dayStr += `Midi=${d.lunch}, `;
-        if (d.snack) dayStr += `Snack=${d.snack}, `;
-        dayStr += `Soir=${d.dinner}`;
+        if (d.breakfast) dayStr += `Matin=${d.breakfast} (${d.breakfastWeight || '?'}), `;
+        dayStr += `Midi=${d.lunch} (${d.lunchWeight || '?'}), `;
+        if (d.snack) dayStr += `Snack=${d.snack} (${d.snackWeight || '?'}), `;
+        dayStr += `Soir=${d.dinner} (${d.dinnerWeight || '?'})`;
         return dayStr;
     }).join('\n');
   }
 
-  const prompt = `GÉNÈRE UN PLAN DE REPAS COMPLET DE 30 JOURS.
+  const prompt = `GÉNÈRE LE PLAN DÉTAILLÉ (30 JOURS).
   
-  CONCEPT VALIDÉ: "${concept.title}"
-  STRATÉGIE: ${concept.description}
-  DATE DÉBUT : ${startDate}.
+  CONTEXTE : ${concept.title}
+  DESCRIPTION : ${concept.description}
+  DÉBUT : ${startDate}.
   
-  SEMAINIER TYPE VALIDÉ (À respecter scrupuleusement pour le style/préférences) :
+  STRUCTURE IMPÉRATIVE (Semainier validé) :
   ${previewStr}
   
-  Profil Utilisateur: ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
-  Exclusions: ${user.exclusions?.join(', ') || 'Aucune'}.
-  
-  EXIGENCES STRICTES :
-  1. Retourne EXCLUSIVEMENT du JSON respectant le schéma fourni.
-  2. SI le semainier contient des 'breakfast' ou 'snack', tu DOIS les générer pour les 30 jours.
-  3. Fournis 30 jours de planification. Tu peux répéter les plats du semainier mais introduis des variations.
-  4. Liste de recettes détaillée avec ingrédients précis.
+  INSTRUCTIONS CRITIQUES :
+  1. Respecte le budget implicite s'il y en a un (ingrédients simples si budget serré).
+  2. Si le semainier a des trous (ex: pas de petit-déj), ne génère PAS de petit-déj pour le reste du mois non plus.
+  3. 'totalWeight' est OBLIGATOIRE pour chaque recette.
+  4. Fais varier les repas sur les semaines suivantes tout en gardant la logique économique.
   `;
 
   try {
