@@ -251,11 +251,11 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                 <div className="flex items-center gap-1 mt-0.5">
                    {cloudStatus === 'syncing' && <span className="block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>}
                    {cloudStatus === 'synced' && <span className="block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
-                   {cloudStatus === 'error' && <span className="block w-1.5 h-1.5 rounded-full bg-rose-500"></span>}
+                   {cloudStatus === 'error' && <span className="block w-1.5 h-1.5 rounded-full bg-amber-500"></span>}
                    <span className={`text-[8px] font-bold uppercase tracking-widest ${
-                     cloudStatus === 'error' ? 'text-rose-400' : cloudStatus === 'syncing' ? 'text-blue-400' : 'text-emerald-500'
+                     cloudStatus === 'error' ? 'text-amber-500' : cloudStatus === 'syncing' ? 'text-blue-400' : 'text-emerald-500'
                    }`}>
-                      {cloudStatus === 'syncing' ? 'Sauvegarde...' : cloudStatus === 'error' ? 'Hors ligne' : 'Sauvegardé'}
+                      {cloudStatus === 'syncing' ? 'Sauvegarde...' : cloudStatus === 'error' ? 'Mémoire Locale' : 'Sauvegardé'}
                    </span>
                 </div>
              </div>
@@ -317,8 +317,10 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
              </button>
              <div>
                <span className="font-bold text-slate-800 block leading-none">Crystal AI</span>
-               <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider">
-                 {cloudStatus === 'syncing' ? 'Sync...' : 'Sauvegardé'}
+               <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                  cloudStatus === 'error' ? 'text-amber-500' : cloudStatus === 'syncing' ? 'text-blue-400' : 'text-emerald-500'
+               }`}>
+                 {cloudStatus === 'syncing' ? 'Sync...' : cloudStatus === 'error' ? 'Local' : 'Sauvegardé'}
                </span>
              </div>
            </div>

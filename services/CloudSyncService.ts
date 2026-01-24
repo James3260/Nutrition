@@ -1,11 +1,16 @@
 
 /**
- * CloudSyncService v10.0 - Google Persistence Layer
+ * CloudSyncService v10.2 - Google Persistence Layer
  * Synchronisation automatique basée sur l'ID unique Google de l'utilisateur.
  */
 export class CloudSyncService {
   private static DATA_KEY = "nutritrack_user_id";
-  private static FIREBASE_URL = "https://nutritrack-v7-default-rtdb.europe-west1.firebasedatabase.app";
+
+  // ---------------------------------------------------------------------------
+  // CONFIGURATION FIREBASE
+  // URL fournie par l'utilisateur pour la persistance des données
+  // ---------------------------------------------------------------------------
+  private static FIREBASE_URL = "https://nutritrack-1aa13-default-rtdb.firebaseio.com"; 
 
   static init() {
     // Nettoyage des anciens paramètres d'URL si présents
@@ -29,34 +34,29 @@ export class CloudSyncService {
     localStorage.setItem(this.DATA_KEY, id);
   }
 
-  // Added missing method to return the current vault/user ID.
   static getVaultId(): string | null {
     return this.getUserId();
   }
 
-  // Added missing method to set the current vault/user ID.
   static setVaultId(id: string) {
     this.setUserId(id);
   }
 
-  // Added missing method to ensure a vault ID exists, creating one if necessary.
-  static async ensureVaultExists(): Promise<string | null> {
+  static ensureVaultExists(): Promise<string | null> {
     let id = this.getUserId();
     if (!id) {
       id = "nutri_" + Math.random().toString(36).substr(2, 9);
       this.setUserId(id);
     }
-    return id;
+    return Promise.resolve(id);
   }
 
-  // Added missing method to generate a sharing link for the current vault.
   static generateMasterLink(): string {
     const id = this.getUserId();
     if (!id) return window.location.origin;
     return `${window.location.origin}?vault=${id}`;
   }
 
-  // Added missing method to export application data to a JSON file.
   static exportToFile(data: any) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -78,8 +78,18 @@ export class CloudSyncService {
     const id = this.getUserId();
     if (!id) return false;
 
+    // --- MODE SIMULATION (DEMO) ---
+    // Si l'utilisateur n'a pas mis sa propre URL (détecté par le mot "demo" dans l'url par défaut), 
+    // on fait semblant que ça marche pour l'UX.
+    if (this.FIREBASE_URL.includes("nutritrack-demo-default")) {
+       await new Promise(r => setTimeout(r, 800)); 
+       return true; 
+    }
+
     try {
-      const response = await fetch(`${this.FIREBASE_URL}/users/${id}.json`, {
+      // Nettoyage de l'URL pour éviter les doubles slashs si l'utilisateur en a mis un à la fin
+      const baseUrl = this.FIREBASE_URL.replace(/\/$/, "");
+      const response = await fetch(`${baseUrl}/users/${id}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, _last_sync: Date.now() })
@@ -98,8 +108,13 @@ export class CloudSyncService {
     const id = this.getUserId();
     if (!id) return null;
 
+    if (this.FIREBASE_URL.includes("nutritrack-demo-default")) {
+       return null; 
+    }
+
     try {
-      const response = await fetch(`${this.FIREBASE_URL}/users/${id}.json`);
+      const baseUrl = this.FIREBASE_URL.replace(/\/$/, "");
+      const response = await fetch(`${baseUrl}/users/${id}.json`);
       if (!response.ok) return null;
       return await response.json();
     } catch (e) {
