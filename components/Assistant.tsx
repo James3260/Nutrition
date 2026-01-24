@@ -218,30 +218,48 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    const txt = input; setInput(''); setIsLoading(true);
+    
+    const txt = input; 
+    setInput(''); 
+    setIsLoading(true);
+    
+    // Ajout immédiat du message utilisateur
     setMessages(prev => [...prev, { role: 'user', content: txt }]);
+    
     try {
       const res = await chatWithAI(txt, user, messages);
-      if (res.extractedInfo) {
+      
+      // Mise à jour profil utilisateur
+      if (res.extractedInfo && Object.keys(res.extractedInfo).length > 0) {
         const updatedUser = { ...user, ...res.extractedInfo };
         if (res.extractedInfo.weight) updatedUser.weightHistory = [...(user.weightHistory || []), { date: new Date().toISOString(), weight: res.extractedInfo.weight }];
         onUpdateUser(updatedUser);
       }
-      setMessages(prev => [...prev, { role: 'assistant', content: res.reply, concept: res.suggestedConcept }]);
-    } catch (err) { setMessages(prev => [...prev, { role: 'assistant', content: "Erreur technique." }]); }
-    finally { setIsLoading(false); }
+      
+      // Ajout réponse Assistant (avec sécurité pour le contenu)
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: res.reply || "J'ai bien reçu l'information.", 
+        concept: res.suggestedConcept 
+      }]);
+
+    } catch (err) { 
+      setMessages(prev => [...prev, { role: 'assistant', content: "Désolé, une erreur technique est survenue." }]); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   if (isLiveMode) {
     return (
       <div className="absolute inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center p-6 animate-in zoom-in-95 duration-500">
+        {/* ... (Code du mode Live inchangé) ... */}
         <div className="absolute top-10 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 flex items-center gap-3 backdrop-blur-md">
           <span className={`w-2.5 h-2.5 rounded-full ${isLiveConnected ? 'bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.5)]' : 'bg-amber-400'}`}></span>
           <span className="text-white text-[10px] font-black uppercase tracking-[0.2em]">{isLiveConnected ? 'Mode Vocal Actif' : 'Connexion Crystal...'}</span>
         </div>
         <div className="relative w-56 h-56 sm:w-72 sm:h-72 flex items-center justify-center">
           <div className="absolute inset-0 rounded-full border border-emerald-500/10 transition-transform duration-75" style={{ transform: `scale(${1 + volumeLevel/200})` }}></div>
-          <div className="absolute inset-4 rounded-full border border-emerald-500/20 transition-transform duration-100" style={{ transform: `scale(${1 + volumeLevel/400})` }}></div>
           <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-7xl shadow-[0_0_60px_-15px_rgba(16,185,129,0.4)] animate-pulse">✨</div>
         </div>
         <button onClick={() => { cleanupAudio(); setIsLiveMode(false); }} className="absolute bottom-16 w-20 h-20 bg-rose-500 hover:bg-rose-600 rounded-full flex items-center justify-center text-white shadow-2xl transition-all active:scale-90 group">
@@ -252,13 +270,18 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-slate-50 relative font-sans">
       {/* Background Decor */}
       <div className="absolute inset-0 bg-gradient-to-tr from-emerald-50/40 via-white to-slate-100 pointer-events-none"></div>
 
-      {/* Discussion Area - Flex-1 with max-width centring */}
-      <div className="flex-1 overflow-y-auto z-10 custom-scrollbar flex flex-col items-center">
-        <div className="w-full max-w-3xl px-4 sm:px-8 py-10 space-y-8">
+      {/* 
+         FIX SCROLL: 
+         1. min-h-0 est critique pour que le scroll fonctionne dans un flex container imbriqué.
+         2. pb-4 pour l'espacement du bas.
+         3. Pas de 'items-center' ici pour éviter les bugs de largeur, on centre le contenu interne.
+      */}
+      <div className="flex-1 overflow-y-auto min-h-0 z-10 custom-scrollbar relative">
+        <div className="w-full max-w-3xl mx-auto px-4 sm:px-8 py-10 space-y-8 min-h-full flex flex-col justify-end">
           {messages.length === 0 && (
             <div className="py-24 text-center animate-in fade-in slide-in-from-bottom-10 duration-1000">
               <div className="w-24 h-24 bg-white rounded-[2.5rem] flex items-center justify-center text-5xl mx-auto mb-8 shadow-premium border border-white">🎙️</div>
@@ -270,7 +293,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
           
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500`}>
-              <div className={`px-6 py-4 max-w-[90%] md:max-w-[80%] text-[15px] leading-relaxed shadow-sm transition-all ${
+              <div className={`px-6 py-4 max-w-[90%] md:max-w-[80%] text-[15px] leading-relaxed shadow-sm transition-all break-words ${
                 msg.role === 'user' 
                   ? 'bg-emerald-600 text-white rounded-[1.8rem] rounded-tr-sm' 
                   : 'bg-white text-slate-700 border border-white rounded-[1.8rem] rounded-tl-sm shadow-premium'
@@ -289,11 +312,11 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} className="h-10" />
+          <div ref={messagesEndRef} className="h-4 shrink-0" />
         </div>
       </div>
 
-      {/* Control Area - Fixed at bottom, centred with Discussion */}
+      {/* Control Area - Fixed at bottom */}
       <div className="shrink-0 p-6 sm:pb-10 bg-white/40 backdrop-blur-xl border-t border-white/50 z-30">
         <div className="max-w-3xl mx-auto flex gap-4 items-center">
           <form onSubmit={handleTextSubmit} className="flex-1 flex gap-2 items-center bg-white p-2 rounded-[2rem] shadow-xl shadow-slate-200/40 border border-white">

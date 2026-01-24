@@ -68,13 +68,14 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
 // --- CHAT PRINCIPAL ---
 export const chatWithAI = async (input: string | { audioData: string, mimeType: string }, user: User, chatHistory: any[]): Promise<any> => {
   if (!process.env.API_KEY) {
-    return { reply: "⚠️ Erreur : Clé API manquante." };
+    return { reply: "⚠️ Erreur : Clé API manquante. Vérifiez la configuration." };
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const isAudioInput = typeof input !== 'string';
-  const modelName = isAudioInput ? 'gemini-2.5-flash-native-audio-preview-12-2025' : 'gemini-3-flash-preview';
+  // On utilise Gemini 2.5 Flash pour une réponse plus rapide et stable avec les outils
+  const modelName = 'gemini-2.5-flash';
 
   const systemInstruction = `Tu es Crystal, coach nutrition d'élite.
   TON STYLE : Court, vif, empathique. Comme un SMS d'un ami expert.
@@ -84,12 +85,13 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   
   MISSION : 
   1. Pose UNE question à la fois (Poids, Taille, Âge, Sexe, Objectif).
-  2. Appelle 'update_user_profile' dès que tu reçois une donnée, et CONFIRME-LE par une phrase naturelle (ex: "C'est noté pour tes 75kg !").
+  2. Appelle 'update_user_profile' dès que tu reçois une donnée.
   3. Appelle 'propose_meal_plan_concept' quand tu as toutes les infos.`;
 
-  const limitedHistory = chatHistory.slice(-10).map(msg => ({
+  // On limite l'historique pour éviter les erreurs de token et garder le focus
+  const limitedHistory = chatHistory.slice(-15).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }]
+    parts: [{ text: msg.content || " " }] // Sécurité anti-vide dans l'historique
   }));
 
   let currentPart;
@@ -126,8 +128,13 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       suggestedConcept: undefined as any
     };
 
-    if (response.text) {
-      result.reply = response.text;
+    // Extraction sécurisée du texte
+    try {
+      if (response.text) {
+        result.reply = response.text;
+      }
+    } catch (e) {
+      // Ignorer l'erreur getter si le texte n'est pas dispo
     }
 
     const functionCalls = response.functionCalls; 
@@ -143,14 +150,18 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       }
     }
 
-    // Fallback intelligent : si l'IA a utilisé un outil mais n'a pas parlé
-    if (!result.reply) {
+    // --- FALLBACK IMPÉRATIF ---
+    // Si l'IA n'a rien renvoyé comme texte (bug fréquent avec les tools), on génère une réponse nous-mêmes.
+    if (!result.reply || result.reply.trim() === "") {
       if (Object.keys(result.extractedInfo).length > 0) {
-        result.reply = "C'est noté ! J'ai bien enregistré ces informations. On continue ?";
+        // L'IA a mis à jour des infos mais n'a rien dit.
+        const keys = Object.keys(result.extractedInfo).join(", ");
+        result.reply = `C'est noté, j'ai mis à jour : ${keys}. On continue ?`;
       } else if (result.suggestedConcept) {
-        result.reply = "Super, j'ai tout ce qu'il faut. Voici le concept de programme que je vous propose :";
+        result.reply = "J'ai préparé une idée de programme pour vous. Regardez ci-dessous :";
       } else {
-        result.reply = "Je vous écoute, dites-m'en plus.";
+        // Cas rare où l'IA bug complètement
+        result.reply = "Je vous écoute. Pouvez-vous préciser votre demande ?";
       }
     }
 
@@ -159,7 +170,7 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   } catch (error) {
     console.error("Chat error:", error);
     return { 
-      reply: "Désolé, j'ai rencontré une petite erreur de connexion. Pouvez-vous répéter ?" 
+      reply: "Désolé, j'ai eu un petit souci de connexion. Pouvez-vous répéter ?" 
     };
   }
 };

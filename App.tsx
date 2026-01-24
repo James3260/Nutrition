@@ -148,7 +148,7 @@ const App: React.FC = () => {
   const isAssistant = activeTab === 'assistant';
 
   return (
-    <div className="flex flex-col h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
+    <div className="flex flex-col h-[100dvh] bg-[#f8fafc] text-slate-900 overflow-hidden">
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -160,10 +160,10 @@ const App: React.FC = () => {
       />
       
       {/* 
-        Container Principal 
-        - Padding top de h-16 (taille du header universel)
+        Container Principal avec calcul de hauteur précis pour mobile
+        pt-16 compense le header fixe
       */}
-      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 transition-all duration-300 ${isAssistant ? 'h-full overflow-hidden' : 'overflow-y-auto no-scrollbar'}`}>
+      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 transition-all duration-300 ${isAssistant ? 'overflow-hidden' : 'overflow-y-auto no-scrollbar'}`}>
         <div className={`w-full h-full ${isAssistant ? '' : 'p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
           {isAssistant && (
             <Assistant 
