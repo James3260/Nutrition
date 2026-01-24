@@ -145,11 +145,10 @@ const App: React.FC = () => {
 
   if (!user || !user.isAuthenticated) return <Login onLogin={handleLogin} />;
 
-  // Modification Layout : Si Assistant, on veut le plein écran (pas de padding, pas de conteneur centré)
   const isAssistant = activeTab === 'assistant';
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#f8fafc] text-slate-900 overflow-hidden">
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -162,11 +161,10 @@ const App: React.FC = () => {
       
       {/* 
         Container Principal 
-        - isAssistant : h-full overflow-hidden (c'est l'Assistant qui gère le scroll interne) + pas de padding.
-        - Autre : overflow-y-auto (scroll global) + padding.
+        - Padding top de h-16 (taille du header universel)
       */}
-      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 lg:pt-0 transition-all duration-300 ${isAssistant ? 'h-full overflow-hidden' : 'overflow-y-auto no-scrollbar'}`}>
-        <div className={`w-full h-full ${isAssistant ? '' : 'p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto'}`}>
+      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 transition-all duration-300 ${isAssistant ? 'h-full overflow-hidden' : 'overflow-y-auto no-scrollbar'}`}>
+        <div className={`w-full h-full ${isAssistant ? '' : 'p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
           {isAssistant && (
             <Assistant 
               setMealPlan={setMealPlan} 

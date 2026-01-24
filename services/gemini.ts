@@ -73,27 +73,23 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Choix du modèle : Audio nécessite gemini-2.5, Texte pur utilise gemini-3 pour la vitesse/intelligence
   const isAudioInput = typeof input !== 'string';
-  const modelName = isAudioInput ? 'gemini-2.5-flash-preview' : 'gemini-3-flash-preview';
+  const modelName = isAudioInput ? 'gemini-2.5-flash-native-audio-preview-12-2025' : 'gemini-3-flash-preview';
 
   const systemInstruction = `Tu es Crystal, coach nutrition d'élite.
   TON STYLE : Court, vif, empathique. Comme un SMS d'un ami expert.
   
-  RÈGLE ABSOLUE : Chaque réponse doit contenir du TEXTE, même si tu utilises un outil.
-  Si l'utilisateur dit juste "Bonjour", réponds poliment et demande son objectif. N'appelle pas d'outil pour "Bonjour".
+  RÈGLE CRITIQUE : Tu DOIS toujours répondre avec du TEXTE, même quand tu utilises un outil. 
+  Ne laisse jamais de réponse vide.
   
-  PROCESSUS :
-  1. Pose UNE question à la fois pour connaître : Poids, Taille, Âge, Sexe, Objectif.
-  2. UTILISE L'OUTIL 'update_user_profile' dès qu'une info est donnée. ACCOMPAGNE CELA D'UNE PHRASE DE CONFIRMATION.
-  3. Quand tu as tout, UTILISE L'OUTIL 'propose_meal_plan_concept'.
-  
-  Ne renvoie JAMAIS de JSON brut dans le texte visible.`;
+  MISSION : 
+  1. Pose UNE question à la fois (Poids, Taille, Âge, Sexe, Objectif).
+  2. Appelle 'update_user_profile' dès que tu reçois une donnée, et CONFIRME-LE par une phrase naturelle (ex: "C'est noté pour tes 75kg !").
+  3. Appelle 'propose_meal_plan_concept' quand tu as toutes les infos.`;
 
-  // On limite l'historique pour éviter de saturer le contexte
   const limitedHistory = chatHistory.slice(-10).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }] // On garde l'historique en texte
+    parts: [{ text: msg.content }]
   }));
 
   let currentPart;
@@ -124,19 +120,16 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       },
     });
 
-    // ANALYSE DE LA RÉPONSE
     const result = {
       reply: "",
       extractedInfo: {} as any,
       suggestedConcept: undefined as any
     };
 
-    // 1. Récupérer le texte
     if (response.text) {
       result.reply = response.text;
     }
 
-    // 2. Vérifier les appels d'outils (Function Calls)
     const functionCalls = response.functionCalls; 
     
     if (functionCalls && functionCalls.length > 0) {
@@ -150,20 +143,15 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
       }
     }
 
-    // --- FALLBACKS INTELLIGENTS ---
-    // Si l'IA a utilisé un outil mais n'a rien dit (bug fréquent), on génère une réponse logique.
-    if (!result.reply && Object.keys(result.extractedInfo).length > 0) {
-        const infoKeys = Object.keys(result.extractedInfo).join(', ');
-        result.reply = `C'est noté (${infoKeys}). Avez-vous d'autres précisions ou préférences ?`;
-    }
-
-    if (!result.reply && result.suggestedConcept) {
-      result.reply = "J'ai bien analysé vos besoins. Voici le concept que je vous propose :";
-    }
-    
-    // Fallback ultime
-    if (!result.reply && !result.suggestedConcept) {
-        result.reply = "Je vous écoute, dites-m'en plus sur vos objectifs.";
+    // Fallback intelligent : si l'IA a utilisé un outil mais n'a pas parlé
+    if (!result.reply) {
+      if (Object.keys(result.extractedInfo).length > 0) {
+        result.reply = "C'est noté ! J'ai bien enregistré ces informations. On continue ?";
+      } else if (result.suggestedConcept) {
+        result.reply = "Super, j'ai tout ce qu'il faut. Voici le concept de programme que je vous propose :";
+      } else {
+        result.reply = "Je vous écoute, dites-m'en plus.";
+      }
     }
 
     return result;
@@ -171,12 +159,12 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   } catch (error) {
     console.error("Chat error:", error);
     return { 
-      reply: "Désolé, une erreur de connexion est survenue. Pouvez-vous répéter ?" 
+      reply: "Désolé, j'ai rencontré une petite erreur de connexion. Pouvez-vous répéter ?" 
     };
   }
 };
 
-// --- GÉNÉRATION DU PLAN (Reste sur Gemini 3 Pro pour la complexité) ---
+// --- GÉNÉRATION DU PLAN ---
 export const generateMealPlan = async (userContext: any, user: User): Promise<MealPlan> => {
   if (!process.env.API_KEY) throw new Error("API Key manquante");
   
@@ -221,7 +209,7 @@ export const generateMealPlan = async (userContext: any, user: User): Promise<Me
   const prompt = `GÉNÈRE UN PLAN DE 30 JOURS.
   Profil: ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
   Objectif: ${userContext.goal || 'Perte de poids saine'}.
-  Préférences détectées: ${JSON.stringify(userContext)}
+  Préférences: ${JSON.stringify(userContext)}
   
   Règles: 30 jours complets, recettes détaillées, grammages précis, déficit calorique calculé.`;
 
