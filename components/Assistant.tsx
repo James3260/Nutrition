@@ -11,7 +11,7 @@ interface Message {
     title: string;
     description: string;
     startDate?: string;
-    weeklyPreview?: { day: number, lunch: string, dinner: string }[];
+    weeklyPreview?: { day: number, breakfast?: string, lunch: string, snack?: string, dinner: string }[];
   };
   timestamp?: Date;
 }
@@ -202,7 +202,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
     setMessages(prev => [...prev, { 
       role: 'assistant', 
-      content: `Parfait ! Je génère le plan de 30 jours basé sur cette semaine type. Cela prend environ 20 secondes...`, 
+      content: `Parfait ! Je génère le plan de 30 jours basé sur cette semaine type (incluant tous vos repas). Cela prend environ 20 secondes...`, 
       timestamp: new Date() 
     }]);
 
@@ -355,7 +355,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                   </div>
                 )}
 
-                <div className={`max-w-[85%] sm:max-w-[85%] lg:max-w-[70%] space-y-2`}>
+                <div className={`max-w-[95%] sm:max-w-[85%] lg:max-w-[70%] space-y-2`}>
                    <div className={`
                      px-5 py-3.5 rounded-2xl text-[15px] leading-relaxed shadow-sm whitespace-pre-wrap
                      ${msg.role === 'user' 
@@ -381,22 +381,54 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                         
                         <p className="text-emerald-700 text-xs mb-4">{msg.concept.description}</p>
                         
-                        {/* Weekly Preview Grid */}
+                        {/* Weekly Preview Grid - CORRIGÉ: Flex col pour éviter la coupure de texte */}
                         {msg.concept.weeklyPreview && (
-                           <div className="grid gap-2 mb-4">
+                           <div className="grid gap-3 mb-4">
                               {msg.concept.weeklyPreview.map((day, idx) => (
-                                 <div key={idx} className="bg-white/60 rounded-xl p-3 border border-emerald-100/50 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                                    <div className="w-16 shrink-0">
-                                       <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-100 px-2 py-1 rounded-md">Jour {day.day}</span>
+                                 <div key={idx} className="bg-white/70 rounded-xl p-3 border border-emerald-100/50 flex flex-col gap-2">
+                                    <div className="w-full border-b border-emerald-100/50 pb-1 mb-1">
+                                       <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-100 px-2 py-1 rounded-md">Jour {day.day}</span>
                                     </div>
-                                    <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
-                                       <div className="flex items-center gap-1.5">
-                                          <span className="text-amber-500 text-[10px]">☀️</span>
-                                          <span className="text-slate-700 font-medium truncate">{day.lunch}</span>
+                                    
+                                    <div className="grid gap-2 text-xs">
+                                       {/* Petit Déjeuner (Optionnel) */}
+                                       {day.breakfast && (
+                                         <div className="flex items-start gap-2">
+                                            <span className="text-amber-400 text-sm mt-0.5">🥐</span>
+                                            <div>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Matin</span>
+                                              <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.breakfast}</span>
+                                            </div>
+                                         </div>
+                                       )}
+
+                                       {/* Déjeuner */}
+                                       <div className="flex items-start gap-2">
+                                          <span className="text-amber-500 text-sm mt-0.5">☀️</span>
+                                          <div>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Midi</span>
+                                            <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.lunch}</span>
+                                          </div>
                                        </div>
-                                       <div className="flex items-center gap-1.5">
-                                          <span className="text-indigo-500 text-[10px]">🌙</span>
-                                          <span className="text-slate-700 font-medium truncate">{day.dinner}</span>
+
+                                       {/* Collation (Optionnel) */}
+                                       {day.snack && (
+                                         <div className="flex items-start gap-2">
+                                            <span className="text-pink-400 text-sm mt-0.5">🍎</span>
+                                            <div>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Collation</span>
+                                              <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.snack}</span>
+                                            </div>
+                                         </div>
+                                       )}
+
+                                       {/* Dîner */}
+                                       <div className="flex items-start gap-2">
+                                          <span className="text-indigo-500 text-sm mt-0.5">🌙</span>
+                                          <div>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Soir</span>
+                                            <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.dinner}</span>
+                                          </div>
                                        </div>
                                     </div>
                                  </div>

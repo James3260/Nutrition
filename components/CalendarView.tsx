@@ -17,7 +17,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
 
   const daysOfWeek = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-  const getRecipe = (id: string) => mealPlan?.recipes.find(r => r.id === id);
+  const getRecipe = (id?: string) => id ? mealPlan?.recipes.find(r => r.id === id) : undefined;
 
   const calendarData = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -178,8 +178,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
 
       {selectedDayInfo && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-t-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 border border-white">
-            <div className="bg-slate-900 p-6 sm:p-8 text-white relative">
+          <div className="bg-white w-full max-w-lg rounded-t-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 border border-white max-h-[85vh] flex flex-col">
+            <div className="bg-slate-900 p-6 sm:p-8 text-white relative shrink-0">
               <div className="relative z-10">
                 <p className="text-emerald-400 font-black uppercase tracking-widest text-[8px] sm:text-[10px] mb-2">Jour {selectedDayInfo.day + 1} du programme</p>
                 <h3 className="text-xl sm:text-2xl lg:text-3xl font-black capitalize tracking-tight leading-tight">
@@ -191,24 +191,39 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
               </button>
             </div>
             
-            <div className="p-5 sm:p-8 space-y-4 sm:space-y-6 bg-slate-50/50">
-              {['lunch', 'dinner'].map(type => {
+            <div className="p-5 sm:p-8 space-y-4 sm:space-y-6 bg-slate-50/50 overflow-y-auto">
+              {['breakfast', 'lunch', 'snack', 'dinner'].map((type) => {
                 const dayData = mealPlan.days[selectedDayInfo.day];
-                const recipeId = (dayData as any)[type];
+                const recipeId = (dayData as any)[type]; // Peut être undefined pour snack/breakfast
+                
+                if (!recipeId) return null;
+
                 const recipe = getRecipe(recipeId);
+                const isSnackOrBreakfast = type === 'snack' || type === 'breakfast';
                 
                 return (
                   <div key={type} className="bg-white rounded-[1.2rem] sm:rounded-[2rem] p-4 sm:p-6 shadow-sm border border-slate-100 flex gap-4 sm:gap-6 items-center group transition-all hover:border-emerald-200">
-                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-[1rem] sm:rounded-[1.5rem] flex items-center justify-center text-xl sm:text-3xl shadow-sm shrink-0 ${type === 'lunch' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                      {type === 'lunch' ? '🍱' : '🌙'}
+                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-[1rem] sm:rounded-[1.5rem] flex items-center justify-center text-xl sm:text-3xl shadow-sm shrink-0 
+                      ${type === 'lunch' ? 'bg-amber-100 text-amber-600' : 
+                        type === 'dinner' ? 'bg-indigo-100 text-indigo-600' :
+                        type === 'breakfast' ? 'bg-orange-100 text-orange-600' :
+                        'bg-pink-100 text-pink-600'
+                      }`}>
+                      {type === 'lunch' ? '🍱' : type === 'dinner' ? '🌙' : type === 'breakfast' ? '🥐' : '🍎'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{type === 'lunch' ? 'Déjeuner' : 'Dîner'}</p>
-                      <h4 className="text-sm sm:text-lg font-black text-slate-800 leading-tight truncate">{recipe?.name || '---'}</h4>
+                      <p className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                        {type === 'lunch' ? 'Déjeuner' : type === 'dinner' ? 'Dîner' : type === 'breakfast' ? 'Petit Déjeuner' : 'Collation'}
+                      </p>
+                      <h4 className="text-sm sm:text-lg font-black text-slate-800 leading-tight truncate">{recipe?.name || (isSnackOrBreakfast ? recipeId : '---')}</h4>
                       <div className="flex items-center gap-2 sm:gap-3 mt-1.5">
-                        <span className="text-[8px] sm:text-[11px] text-emerald-600 font-black">{recipe?.calories} kcal</span>
-                        <span className="text-[8px] sm:text-[11px] text-slate-300 hidden sm:inline">•</span>
-                        <span className="text-[8px] sm:text-[11px] text-slate-400 font-bold">{recipe?.ingredients.length} ingr.</span>
+                        <span className="text-[8px] sm:text-[11px] text-emerald-600 font-black">{recipe?.calories || '?'} kcal</span>
+                        {recipe && (
+                          <>
+                          <span className="text-[8px] sm:text-[11px] text-slate-300 hidden sm:inline">•</span>
+                          <span className="text-[8px] sm:text-[11px] text-slate-400 font-bold">{recipe.ingredients.length} ingr.</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -216,7 +231,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
               })}
             </div>
 
-            <div className="p-5 sm:p-8 pt-0">
+            <div className="p-5 sm:p-8 pt-0 shrink-0">
               <button onClick={() => setSelectedDayInfo(null)} className="w-full py-4 sm:py-5 bg-slate-900 text-white rounded-[1.2rem] sm:rounded-[1.5rem] font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95">Fermer</button>
             </div>
           </div>

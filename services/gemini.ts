@@ -23,7 +23,7 @@ export const updateUserTool: FunctionDeclaration = {
 
 export const proposeConceptTool: FunctionDeclaration = {
   name: "propose_meal_plan_concept",
-  description: "Propose un SEMAINE TYPE (7 jours) complète pour validation. DOIT inclure la startDate confirmée par l'utilisateur.",
+  description: "Propose un SEMAINIER TYPE (7 jours) complet pour validation. DOIT inclure la startDate et les préférences repas (ptit dej/collation).",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -32,14 +32,17 @@ export const proposeConceptTool: FunctionDeclaration = {
       startDate: { type: Type.STRING, description: "Date de début CONFIRMÉE par l'utilisateur (YYYY-MM-DD)." },
       weeklyPreview: { 
         type: Type.ARRAY, 
-        description: "Menu type pour les 7 premiers jours (Midi et Soir).",
+        description: "Menu type pour les 7 premiers jours.",
         items: {
           type: Type.OBJECT,
           properties: {
             day: { type: Type.INTEGER, description: "Numéro du jour (1 à 7)" },
-            lunch: { type: Type.STRING, description: "Nom du plat midi" },
-            dinner: { type: Type.STRING, description: "Nom du plat soir" }
-          }
+            breakfast: { type: Type.STRING, description: "Petit-déjeuner (si demandé)" },
+            lunch: { type: Type.STRING, description: "Déjeuner" },
+            snack: { type: Type.STRING, description: "Collation / Dessert (si demandé)" },
+            dinner: { type: Type.STRING, description: "Dîner" }
+          },
+          required: ["day", "lunch", "dinner"] // Breakfast et Snack sont optionnels techniquement, mais l'IA doit les remplir si demandé
         }
       }
     },
@@ -130,15 +133,19 @@ export const chatWithAI = async (
   ${contextStr}
   
   PROCÉDURE DE PLANIFICATION (OBLIGATOIRE) :
-  1. Si l'utilisateur demande un plan, VÉRIFIE SI UNE DATE DE DÉBUT EST DÉFINIE OU MENTIONNÉE.
-     -> Si l'utilisateur n'a pas donné de date : DEMANDE LUI D'ABORD : "À partir de quelle date souhaitez-vous commencer ce programme ?"
-     -> NE PROPOSE RIEN TANT QUE TU N'AS PAS LA DATE.
+  1. Si l'utilisateur demande un plan, TU DOIS D'ABORD POSER DES QUESTIONS DE PRÉFÉRENCES :
+     - "À partir de quelle date souhaitez-vous commencer ?" (Si pas déjà donnée)
+     - "Souhaitez-vous inclure le PETIT-DÉJEUNER ?"
+     - "Souhaitez-vous une COLLATION ou un DESSERT ?"
+     
+     -> NE PROPOSE PAS DE PLAN TANT QUE TU N'AS PAS CES RÉPONSES (Sauf si l'utilisateur a été explicite dès le début).
   
-  2. Une fois la date obtenue :
-     -> UTILISE 'propose_meal_plan_concept' avec le paramètre 'startDate' rempli.
-     -> Propose un TITRE, une STRATÉGIE et un SEMAINIER TYPE DE 7 JOURS (weeklyPreview).
+  2. Une fois les préférences claires :
+     -> UTILISE 'propose_meal_plan_concept'.
+     -> Remplis le champ 'weeklyPreview' avec TOUS les repas demandés (Breakfast?, Lunch, Snack?, Dinner).
+     -> Assure-toi que les noms des plats sont appétissants mais concis.
   
-  3. L'utilisateur doit valider le concept. Ensuite, l'app générera le mois complet à partir de la date choisie.
+  3. L'utilisateur doit valider le concept. Ensuite, l'app générera le mois complet.
 
   TES AUTRES POUVOIRS :
   1. ANALYSE VISUELLE : Si l'utilisateur envoie une image de nourriture, analyse-la, estime les calories et UTILISE 'log_meal'.
@@ -225,7 +232,7 @@ export const chatWithAI = async (
       } else if (Object.keys(result.extractedInfo).length > 0) {
         result.reply = `Profil mis à jour.`;
       } else if (result.suggestedConcept) {
-        result.reply = `C'est noté pour le ${result.suggestedConcept.startDate}. J'ai préparé une structure basée sur "${result.suggestedConcept.title}". Regardez ci-dessus. On valide ?`;
+        result.reply = `J'ai préparé une structure pour le ${result.suggestedConcept.startDate}. Prenez le temps de lire le menu ci-dessus (cliquez pour voir tout le texte si besoin). On valide ?`;
       } else {
         result.reply = "Je vous écoute.";
       }
@@ -255,7 +262,9 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
           type: Type.OBJECT,
           properties: {
             day: { type: Type.INTEGER },
+            breakfast: { type: Type.STRING },
             lunch: { type: Type.STRING },
+            snack: { type: Type.STRING },
             dinner: { type: Type.STRING }
           }
         }
@@ -284,19 +293,26 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
 
   const startDate = concept.startDate || new Date().toISOString().split('T')[0];
 
-  // On formate le preview pour le prompt
+  // On formate le preview pour le prompt avec TOUS les champs
   let previewStr = "";
   if (concept.weeklyPreview && Array.isArray(concept.weeklyPreview)) {
-    previewStr = concept.weeklyPreview.map((d: any) => `Jour ${d.day}: Midi=${d.lunch}, Soir=${d.dinner}`).join('\n');
+    previewStr = concept.weeklyPreview.map((d: any) => {
+        let dayStr = `Jour ${d.day}: `;
+        if (d.breakfast) dayStr += `Matin=${d.breakfast}, `;
+        dayStr += `Midi=${d.lunch}, `;
+        if (d.snack) dayStr += `Snack=${d.snack}, `;
+        dayStr += `Soir=${d.dinner}`;
+        return dayStr;
+    }).join('\n');
   }
 
   const prompt = `GÉNÈRE UN PLAN DE REPAS COMPLET DE 30 JOURS.
   
   CONCEPT VALIDÉ: "${concept.title}"
   STRATÉGIE: ${concept.description}
-  DATE DÉBUT : ${startDate} (Très important, le jour 1 correspond à cette date).
+  DATE DÉBUT : ${startDate}.
   
-  SEMAINIER TYPE VALIDÉ PAR L'UTILISATEUR (À utiliser comme base/style) :
+  SEMAINIER TYPE VALIDÉ (À respecter scrupuleusement pour le style/préférences) :
   ${previewStr}
   
   Profil Utilisateur: ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
@@ -304,8 +320,9 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
   
   EXIGENCES STRICTES :
   1. Retourne EXCLUSIVEMENT du JSON respectant le schéma fourni.
-  2. Fournis 30 jours de planification. Tu peux répéter les plats du semainier mais introduis des variations pour ne pas lasser.
-  3. Crée une liste de recettes détaillée avec ingrédients précis et étapes.
+  2. SI le semainier contient des 'breakfast' ou 'snack', tu DOIS les générer pour les 30 jours.
+  3. Fournis 30 jours de planification. Tu peux répéter les plats du semainier mais introduis des variations.
+  4. Liste de recettes détaillée avec ingrédients précis.
   `;
 
   try {

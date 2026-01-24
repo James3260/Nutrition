@@ -14,7 +14,9 @@ export interface Recipe {
 
 export interface DayPlan {
   day: number;
+  breakfast?: string; // Nouveau
   lunch: string;
+  snack?: string;     // Nouveau (Dessert/Collation)
   dinner: string;
 }
 

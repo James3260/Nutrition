@@ -146,14 +146,31 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
              <div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-lg md:text-xl font-black text-slate-900">Aujourd'hui</h2><span className="text-[9px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest">{isProfileComplete ? 'Calibré' : 'Mode Démo'}</span></div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                
-               {/* Affichage intelligent : Soit le plan, soit les repas loggés s'il y en a */}
+               {/* Affichage intelligent : Tous les repas du plan */}
                {currentDayPlan ? (
-                 ['lunch', 'dinner'].map((type) => {
+                 ['breakfast', 'lunch', 'snack', 'dinner'].map((type) => {
                    const recipeId = (currentDayPlan as any)[type];
+                   if (!recipeId) return null; // Ne rien afficher si pas de repas pour ce type (ex: pas de collation)
+                   
                    const recipe = mealPlan?.recipes?.find(r => r.id === recipeId);
+                   const isLunch = type === 'lunch';
+                   const isDinner = type === 'dinner';
+                   const isBreakfast = type === 'breakfast';
+                   
                    return (
                      <div key={type} className="p-4 sm:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all flex flex-col justify-between">
-                        <div className="flex items-center gap-3 sm:gap-4 mb-4"><div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-sm shrink-0">{type === 'lunch' ? '🍱' : '🌙'}</div><div className="min-w-0"><p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase">Planifié</p><h4 className="text-xs sm:text-sm font-black text-slate-800 truncate">{recipe?.name || '---'}</h4></div></div>
+                        <div className="flex items-center gap-3 sm:gap-4 mb-4">
+                          <div className={`w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-sm shrink-0
+                             ${isLunch ? 'text-amber-500' : isDinner ? 'text-indigo-500' : isBreakfast ? 'text-orange-500' : 'text-pink-500'}`}>
+                             {isLunch ? '🍱' : isDinner ? '🌙' : isBreakfast ? '🥐' : '🍎'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase">
+                              {isLunch ? 'Déjeuner' : isDinner ? 'Dîner' : isBreakfast ? 'Petit Déjeuner' : 'Collation'}
+                            </p>
+                            <h4 className="text-xs sm:text-sm font-black text-slate-800 truncate">{recipe?.name || recipeId}</h4>
+                          </div>
+                        </div>
                      </div>
                    );
                  })
