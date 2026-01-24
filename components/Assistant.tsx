@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { chatWithAI, generateMealPlan } from '../services/gemini';
-import { MealPlan, User } from '../types';
+import { MealPlan, User, WorkoutSession, HydrationRecord } from '../types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -30,6 +30,31 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Calcul du contexte "Live" pour l'IA
+  const dailyContext = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    
+    const caloriesBurned = (user.workouts || [])
+      .filter(w => new Date(w.date).toDateString() === todayStr)
+      .reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
+      
+    const hydrationCurrent = (user.hydrationRecords || [])
+      .filter(r => new Date(r.date).toDateString() === todayStr)
+      .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+    // Estimation basique des calories mangées (mockup sans mealPlan précis ici)
+    const caloriesEaten = (user.eatenMeals || [])
+       .filter(m => new Date(m.date).toDateString() === todayStr)
+       .length * 600; // Moyenne arbitraire si pas de data précise
+
+    return {
+      caloriesEaten,
+      caloriesBurned,
+      hydrationCurrent,
+      hydrationGoal: user.hydrationGoal || 2000
+    };
+  }, [user]);
+
   // Scroll automatique intelligent
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -47,16 +72,62 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     setMessages(prev => [...prev, newUserMsg]);
 
     try {
-      const response = await chatWithAI(userMsg, user, messages);
+      // On passe le contexte journalier à l'IA
+      const response = await chatWithAI(userMsg, user, messages, dailyContext);
 
+      let updatedUser = { ...user };
+      let hasUpdates = false;
+
+      // 1. Mise à jour profil simple
       if (response.extractedInfo && Object.keys(response.extractedInfo).length > 0) {
-        const updatedUser = { ...user, ...response.extractedInfo };
+        updatedUser = { ...updatedUser, ...response.extractedInfo };
         if (response.extractedInfo.weight) {
            updatedUser.weightHistory = [
              ...(user.weightHistory || []), 
              { date: new Date().toISOString(), weight: response.extractedInfo.weight }
            ];
         }
+        hasUpdates = true;
+      }
+
+      // 2. Traitement des actions spéciales (Sport / Hydratation)
+      if (response.actionLog && response.actionLog.length > 0) {
+        for (const action of response.actionLog) {
+          if (action.type === 'workout') {
+            const data = action.data;
+            const factorMap: Record<string, number> = { 
+               RUNNING: 10, CYCLING: 8, SWIMMING: 9, WALKING: 4, 
+               WEIGHTLIFTING: 6, CROSSFIT: 11, HIIT: 12, YOGA: 3, 
+               PILATES: 4, TEAM_SPORTS: 8 
+            };
+            const factor = factorMap[data.type] || 5;
+            const intensityMult = data.intensity === 'high' ? 1.2 : data.intensity === 'low' ? 0.8 : 1.0;
+            const calories = Math.round(data.duration * factor * intensityMult);
+
+            const newWorkout: WorkoutSession = {
+              id: Math.random().toString(36).substr(2, 9),
+              date: new Date().toISOString(),
+              type: data.type, // L'IA doit renvoyer le type ENUM correct
+              duration: data.duration,
+              intensity: data.intensity || 'medium',
+              caloriesBurned: calories
+            };
+            updatedUser.workouts = [newWorkout, ...(updatedUser.workouts || [])];
+            hasUpdates = true;
+          }
+          
+          if (action.type === 'hydration') {
+             const newRecord: HydrationRecord = {
+               date: new Date().toISOString(),
+               amount: action.data.amount
+             };
+             updatedUser.hydrationRecords = [...(updatedUser.hydrationRecords || []), newRecord];
+             hasUpdates = true;
+          }
+        }
+      }
+
+      if (hasUpdates) {
         onUpdateUser(updatedUser);
       }
 
@@ -137,11 +208,14 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Profil Détecté</p>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Profil & Contexte</p>
              <div className="space-y-1">
                 <p className="text-xs font-medium text-slate-700">👤 {user.name}</p>
                 <p className="text-xs font-medium text-slate-700">⚖️ {user.weightHistory?.slice(-1)[0]?.weight || '--'} kg</p>
-                <p className="text-xs font-medium text-slate-700">📏 {user.height || '--'} cm</p>
+                <div className="h-px bg-slate-100 my-2"></div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Aujourd'hui</p>
+                <p className="text-xs font-medium text-blue-600">💧 {dailyContext.hydrationCurrent}/{dailyContext.hydrationGoal}ml</p>
+                <p className="text-xs font-medium text-orange-600">🔥 {dailyContext.caloriesBurned} kcal brûlées</p>
              </div>
           </div>
 
@@ -160,7 +234,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
               </div>
               <div className="min-w-0">
                  <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
-                 <p className="text-[10px] text-slate-500 truncate">Utilisateur Premium</p>
+                 <p className="text-[10px] text-slate-500 truncate">Mode Connecté</p>
               </div>
            </div>
         </div>
@@ -192,16 +266,16 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in duration-700">
                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">🤖</div>
                <h2 className="text-2xl font-black text-slate-800 mb-2">Comment puis-je vous aider ?</h2>
-               <p className="text-slate-400 max-w-xs mx-auto mb-8">Je peux créer un programme complet pour mars 2026, analyser vos repas ou calculer vos calories.</p>
+               <p className="text-slate-400 max-w-xs mx-auto mb-8">Je suis connectée à votre Activité et votre Hydratation.</p>
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md w-full">
-                  <button onClick={() => setInput("Génère un programme pour Mars 2026")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
-                     <span className="text-lg block mb-1">📅</span>
-                     <span className="text-xs font-bold text-slate-700">Programme Mars 2026</span>
+                  <button onClick={() => setInput("J'ai couru 30 minutes")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
+                     <span className="text-lg block mb-1">🏃‍♂️</span>
+                     <span className="text-xs font-bold text-slate-700">Enregistrer un sport</span>
                   </button>
-                  <button onClick={() => setInput("Suggère un dîner léger")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
-                     <span className="text-lg block mb-1">🥗</span>
-                     <span className="text-xs font-bold text-slate-700">Idée repas léger</span>
+                  <button onClick={() => setInput("J'ai bu 500ml d'eau")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
+                     <span className="text-lg block mb-1">💧</span>
+                     <span className="text-xs font-bold text-slate-700">Ajouter de l'eau</span>
                   </button>
                </div>
             </div>
@@ -294,7 +368,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Posez une question à Crystal..."
+                  placeholder="Ex: J'ai couru 1h ou J'ai bu de l'eau..."
                   className="w-full bg-transparent border-none outline-none text-sm text-slate-800 placeholder:text-slate-400 px-4 py-3 max-h-32"
                   autoComplete="off"
                 />

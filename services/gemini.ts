@@ -1,11 +1,12 @@
 
-import { GoogleGenAI, Type, Modality, FunctionDeclaration, Tool } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration, Tool } from "@google/genai";
 import { MealPlan, User } from "../types";
 
 // --- DÉFINITION DES OUTILS (TOOLS) ---
+
 export const updateUserTool: FunctionDeclaration = {
   name: "update_user_profile",
-  description: "Enregistre les données utilisateur. À utiliser DÈS qu'une info est donnée (poids, âge, objectif, etc).",
+  description: "Enregistre les données utilisateur (poids, âge, objectif, etc).",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -22,7 +23,7 @@ export const updateUserTool: FunctionDeclaration = {
 
 export const proposeConceptTool: FunctionDeclaration = {
   name: "propose_meal_plan_concept",
-  description: "Propose un concept de plan de repas. DÉCLENCHE LA GÉNÉRATION. Si l'utilisateur donne une date (ex: mars 2026), l'inclure dans startDate.",
+  description: "Propose un concept de plan de repas pour déclencher la génération complète.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -35,12 +36,49 @@ export const proposeConceptTool: FunctionDeclaration = {
   }
 };
 
+export const logWorkoutTool: FunctionDeclaration = {
+  name: "log_workout",
+  description: "Enregistre une séance de sport dans l'onglet Activité.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      type: { type: Type.STRING, enum: ["RUNNING", "CYCLING", "SWIMMING", "WALKING", "WEIGHTLIFTING", "CROSSFIT", "HIIT", "YOGA", "PILATES", "TEAM_SPORTS"], description: "Type de sport normalisé" },
+      duration: { type: Type.NUMBER, description: "Durée en minutes" },
+      intensity: { type: Type.STRING, enum: ["low", "medium", "high"], description: "Intensité de l'effort" },
+      caloriesEstimate: { type: Type.NUMBER, description: "Estimation des calories brûlées (facultatif)" }
+    },
+    required: ["type", "duration"]
+  }
+};
+
+export const logHydrationTool: FunctionDeclaration = {
+  name: "log_hydration",
+  description: "Enregistre un apport en eau dans le Dashboard.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      amount: { type: Type.NUMBER, description: "Quantité d'eau en ml" }
+    },
+    required: ["amount"]
+  }
+};
+
 export const tools: Tool[] = [
-  { functionDeclarations: [updateUserTool, proposeConceptTool] }
+  { functionDeclarations: [updateUserTool, proposeConceptTool, logWorkoutTool, logHydrationTool] }
 ];
 
 // --- CHAT PRINCIPAL ---
-export const chatWithAI = async (input: string | { audioData: string, mimeType: string }, user: User, chatHistory: any[]): Promise<any> => {
+export const chatWithAI = async (
+  input: string | { audioData: string, mimeType: string }, 
+  user: User, 
+  chatHistory: any[],
+  context?: {
+    caloriesEaten: number;
+    caloriesBurned: number;
+    hydrationCurrent: number;
+    hydrationGoal: number;
+  }
+): Promise<any> => {
   if (!process.env.API_KEY) {
     return { reply: "⚠️ Erreur : Clé API manquante. Vérifiez la configuration." };
   }
@@ -48,14 +86,31 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelName = 'gemini-2.5-flash';
 
-  const systemInstruction = `Tu es Crystal, une IA nutritionniste de luxe.
-  CONTEXTE : Tu discutes avec ${user.name || 'un utilisateur'}.
-  DONNÉES ACTUELLES : Poids: ${user.weightHistory?.[user.weightHistory.length-1]?.weight || '?'}kg, Taille: ${user.height || '?'}cm.
+  // Construction d'un contexte "Temps Réel" pour l'IA
+  const contextStr = context ? `
+  ÉTAT DU JOUR (Temps Réel) :
+  - Hydratation : ${context.hydrationCurrent}ml / ${context.hydrationGoal}ml.
+  - Calories mangées (estimé) : ${context.caloriesEaten} kcal.
+  - Calories brûlées (sport) : ${context.caloriesBurned} kcal.
+  ` : '';
+
+  const systemInstruction = `Tu es Crystal, une IA nutritionniste de luxe connectée à une application de biologie.
   
+  CONTEXTE UTILISATEUR :
+  Nom: ${user.name}.
+  Poids: ${user.weightHistory?.[user.weightHistory.length-1]?.weight || '?'}kg.
+  ${contextStr}
+  
+  TES SUPER-POUVOIRS (OUTILS) :
+  1. Si l'utilisateur dit "J'ai couru 10min", UTILISE 'log_workout'. Ne fais pas juste répondre.
+  2. Si l'utilisateur dit "J'ai bu un verre d'eau", UTILISE 'log_hydration'.
+  3. Si l'utilisateur veut un programme, UTILISE 'propose_meal_plan_concept'.
+  4. Si l'utilisateur donne une info physique, UTILISE 'update_user_profile'.
+
   RÈGLES :
-  1. Si l'utilisateur demande un programme pour une date spécifique (ex: "Mars 2026"), utilise l'outil 'propose_meal_plan_concept' avec la bonne 'startDate'.
-  2. Réponds toujours poliment et de manière concise.
-  3. Si tu utilises un outil, fais toujours une phrase de confirmation pour l'utilisateur.
+  - Sois proactive. Si l'hydratation est basse dans le contexte, rappelle-lui de boire.
+  - Analyse les données. Si l'utilisateur a beaucoup brûlé de calories, suggère de bien manger.
+  - Réponse courte, élégante et encourageante.
   `;
 
   const contents: { role: string, parts: any[] }[] = chatHistory.slice(-10).map(msg => ({
@@ -90,7 +145,8 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
     const result = {
       reply: "",
       extractedInfo: {} as any,
-      suggestedConcept: undefined as any
+      suggestedConcept: undefined as any,
+      actionLog: [] as any[] // Pour stocker les actions sport/eau
     };
 
     if (response.text) {
@@ -107,15 +163,25 @@ export const chatWithAI = async (input: string | { audioData: string, mimeType: 
         if (call.name === 'propose_meal_plan_concept') {
           result.suggestedConcept = call.args;
         }
+        if (call.name === 'log_workout') {
+          result.actionLog.push({ type: 'workout', data: call.args });
+        }
+        if (call.name === 'log_hydration') {
+          result.actionLog.push({ type: 'hydration', data: call.args });
+        }
       }
     }
 
-    // Fallback si pas de texte généré par le modèle
+    // Fallback message si l'IA a juste exécuté une action sans parler
     if (!result.reply || result.reply.trim().length === 0) {
-      if (Object.keys(result.extractedInfo).length > 0) {
+      if (result.actionLog.length > 0) {
+         const type = result.actionLog[0].type;
+         if (type === 'workout') result.reply = "Séance enregistrée ! 💪 Excellente activité.";
+         if (type === 'hydration') result.reply = "Hydratation ajoutée. 💧";
+      } else if (Object.keys(result.extractedInfo).length > 0) {
         result.reply = `Profil mis à jour.`;
       } else if (result.suggestedConcept) {
-        result.reply = `Voici une proposition pour votre programme "${result.suggestedConcept.title}". Souhaitez-vous que je le génère ?`;
+        result.reply = `Je peux générer le programme "${result.suggestedConcept.title}". On y va ?`;
       } else {
         result.reply = "Je vous écoute.";
       }
@@ -189,7 +255,7 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Modèle puissant pour la génération complexe
+      model: 'gemini-3-pro-preview', 
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -198,7 +264,6 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
     });
     
     const result = JSON.parse(response.text || '{}');
-    // On force la date de début retournée par l'outil ou par défaut aujourd'hui
     result.startDate = startDate;
     
     return result;
