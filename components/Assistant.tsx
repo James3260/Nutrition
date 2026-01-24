@@ -26,18 +26,16 @@ interface AssistantProps {
 const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, messages, setMessages }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile sidebar toggle
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // --- Live API (Simplifié pour focus Chat) ---
   const [isLiveMode, setIsLiveMode] = useState(false);
-  // (Le code Live API complet est masqué ici pour alléger, mais l'appel reste possible si vous le souhaitez, 
-  // on se concentre sur l'UX Chat demandée)
 
-  // Scroll automatique vers le bas lors de nouveaux messages
+  // Scroll automatique intelligent
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [messages.length, isLoading]);
 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,18 +45,14 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     setInput('');
     setIsLoading(true);
 
-    // 1. Ajouter message user
     const newUserMsg: Message = { role: 'user', content: userMsg, timestamp: new Date() };
     setMessages(prev => [...prev, newUserMsg]);
 
     try {
-      // 2. Appel AI
       const response = await chatWithAI(userMsg, user, messages);
 
-      // 3. Mise à jour profil si détecté
       if (response.extractedInfo && Object.keys(response.extractedInfo).length > 0) {
         const updatedUser = { ...user, ...response.extractedInfo };
-        // Gestion poids historique
         if (response.extractedInfo.weight) {
            updatedUser.weightHistory = [
              ...(user.weightHistory || []), 
@@ -68,7 +62,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         onUpdateUser(updatedUser);
       }
 
-      // 4. Ajouter réponse AI
       const newAiMsg: Message = { 
         role: 'assistant', 
         content: response.reply, 
@@ -87,20 +80,22 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
   const clearHistory = () => {
     if(confirm("Effacer tout l'historique de conversation ?")) {
       setMessages([]);
+      // Force un re-rendu immédiat du scroll
+      setTimeout(() => setIsSidebarOpen(false), 100);
     }
   };
 
   // --- RENDER ---
   return (
-    <div className="flex h-full bg-white overflow-hidden relative font-sans">
+    <div className="flex h-full w-full bg-white relative font-sans overflow-hidden">
       
-      {/* SIDEBAR (Desktop: Toujours visible, Mobile: Drawer) */}
+      {/* SIDEBAR */}
       <div className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-slate-50 border-r border-slate-200 transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-[80] w-64 bg-slate-50 border-r border-slate-200 transform transition-transform duration-300 ease-in-out
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:relative lg:translate-x-0 lg:w-72 flex flex-col
+        lg:relative lg:translate-x-0 lg:w-72 flex flex-col shrink-0 h-full
       `}>
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center h-16 shrink-0">
           <div className="flex items-center gap-2">
              <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white text-lg">✨</div>
              <span className="font-bold text-slate-700">Crystal AI</span>
@@ -120,13 +115,13 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
           <button 
             onClick={clearHistory}
-            className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-3 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors"
           >
             <span className="text-lg">🗑️</span> Nouvelle conversation
           </button>
         </div>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className="p-4 border-t border-slate-100 shrink-0">
            <div className="flex items-center gap-3 px-3 py-2 bg-slate-100 rounded-xl">
               <div className="w-8 h-8 bg-slate-300 rounded-full flex items-center justify-center text-slate-600 font-bold">
                  {user.name[0]}
@@ -142,16 +137,16 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       {/* OVERLAY MOBILE pour Sidebar */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/20 z-[70] lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         ></div>
       )}
 
       {/* MAIN CHAT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white relative">
+      <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
         
-        {/* HEADER MOBILE */}
-        <div className="lg:hidden h-14 border-b border-slate-100 flex items-center px-4 justify-between shrink-0">
+        {/* HEADER MOBILE (visible uniquement sur mobile) */}
+        <div className="lg:hidden h-14 border-b border-slate-100 flex items-center px-4 justify-between shrink-0 bg-white z-10">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
@@ -159,15 +154,15 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
            <div className="w-8"></div>
         </div>
 
-        {/* MESSAGES LIST */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
+        {/* MESSAGES LIST - min-h-0 est CRUCIAL pour le scroll dans un flex child */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6 custom-scrollbar scroll-smooth">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center opacity-0 animate-in fade-in duration-700">
+            <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in duration-700">
                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">🤖</div>
                <h2 className="text-2xl font-black text-slate-800 mb-2">Comment puis-je vous aider ?</h2>
-               <p className="text-slate-400 max-w-xs mx-auto">Je peux analyser vos repas, calculer vos calories ou créer un programme complet.</p>
+               <p className="text-slate-400 max-w-xs mx-auto mb-8">Je peux analyser vos repas, calculer vos calories ou créer un programme complet.</p>
                
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8 max-w-md w-full">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md w-full">
                   <button onClick={() => setInput("Analyse mon poids actuel")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
                      <span className="text-lg block mb-1">⚖️</span>
                      <span className="text-xs font-bold text-slate-700">Mon suivi poids</span>
@@ -181,31 +176,22 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
           ) : (
             messages.map((msg, i) => (
               <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                
-                {/* Avatar AI */}
                 {msg.role === 'assistant' && (
                   <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs shrink-0 mt-1 shadow-sm">
                     ✨
                   </div>
                 )}
 
-                {/* Bulle Message */}
                 <div className={`max-w-[85%] sm:max-w-[75%] space-y-2`}>
                    <div className={`
-                     px-5 py-3.5 rounded-2xl text-[15px] leading-relaxed shadow-sm
+                     px-5 py-3.5 rounded-2xl text-[15px] leading-relaxed shadow-sm whitespace-pre-wrap
                      ${msg.role === 'user' 
                        ? 'bg-slate-800 text-white rounded-tr-none' 
                        : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'}
                    `}>
-                     {/* Markdown simulation basic */}
-                     {msg.content.split('\n').map((line, idx) => (
-                       <p key={idx} className={`min-h-[1rem] ${line.startsWith('-') ? 'pl-4' : ''}`}>
-                         {line}
-                       </p>
-                     ))}
+                     {msg.content}
                    </div>
                    
-                   {/* Affichage d'un concept de plan si proposé */}
                    {msg.concept && (
                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mt-2 animate-in slide-in-from-left-4">
                         <h4 className="font-black text-emerald-800 text-sm mb-1">{msg.concept.title}</h4>
@@ -224,13 +210,11 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                      </div>
                    )}
                    
-                   {/* Timestamp discret */}
                    <p className={`text-[10px] text-slate-300 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                      {msg.timestamp ? msg.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                      {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
                    </p>
                 </div>
 
-                {/* Avatar User */}
                 {msg.role === 'user' && (
                   <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xs shrink-0 mt-1">
                     {user.name[0]}
@@ -240,7 +224,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             ))
           )}
           
-          {/* Indicateur de chargement */}
           {isLoading && (
             <div className="flex gap-4">
                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs shrink-0 mt-1">✨</div>
@@ -254,8 +237,8 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
           <div ref={messagesEndRef} className="h-4" />
         </div>
 
-        {/* INPUT AREA */}
-        <div className="p-4 border-t border-slate-100 bg-white">
+        {/* INPUT AREA - Fixe en bas */}
+        <div className="p-4 border-t border-slate-100 bg-white shrink-0 z-20">
           <div className="max-w-3xl mx-auto relative">
              <form onSubmit={handleTextSubmit} className="relative flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-3xl p-2 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
                 <input

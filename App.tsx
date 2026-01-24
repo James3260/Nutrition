@@ -140,7 +140,11 @@ const App: React.FC = () => {
     if (isReady && user) {
       StorageService.saveData('current_user', user);
       if (mealPlan) StorageService.saveData('plan', mealPlan);
-      if (chatMessages.length > 0) StorageService.saveData('chat_history', chatMessages);
+      
+      // FIX CRITIQUE : On sauvegarde TOUJOURS l'historique, même s'il est vide []
+      // Cela permet à "Nouvelle conversation" d'écraser les anciennes données.
+      StorageService.saveData('chat_history', chatMessages);
+      
       const timer = setTimeout(() => pushToCloud(), 3000);
       return () => clearTimeout(timer);
     }
@@ -177,13 +181,12 @@ const App: React.FC = () => {
       />
       
       {/* 
-        Container Principal 
-        pt-16 pour compenser le header fixe
-        height calculée : 100dvh (viewport) - 64px (header)
-        Cela garantit que l'intérieur (Assistant) peut scroller indépendamment
+        Container Principal
+        Utilisation de mt-16 au lieu de pt-16 pour séparer proprement du header fixe.
+        flex-1 et min-h-0 garantissent que le scroll interne fonctionne sur Safari/iOS.
       */}
-      <main className="flex-1 pt-16 h-full overflow-hidden">
-        <div className={`w-full h-full ${isAssistant ? '' : 'overflow-y-auto p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
+      <main className="flex-1 mt-16 flex flex-col min-h-0 overflow-hidden relative">
+        <div className={`flex-1 w-full min-h-0 ${isAssistant ? 'overflow-hidden flex flex-col' : 'overflow-y-auto p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
           {isAssistant && (
             <Assistant 
               setMealPlan={setMealPlan} 
