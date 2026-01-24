@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, FunctionDeclaration, Tool, Schema } from "@google/genai";
-import { MealPlan, User } from "../types";
+import { MealPlan, User, Recipe } from "../types";
 
 // --- DÉFINITION DES OUTILS (TOOLS) ---
 // On rend TOUT optionnel pour éviter que Gemini ne plante s'il manque un détail.
@@ -49,7 +49,6 @@ export const proposeConceptTool: FunctionDeclaration = {
         }
       }
     }
-    // AUCUN required : on laisse l'IA remplir ce qu'elle peut
   }
 };
 
@@ -115,10 +114,9 @@ export const chatWithAI = async (
   const modelName = 'gemini-3-flash-preview'; 
 
   // Nettoyage de l'historique pour éviter les boucles d'erreur
-  // On ne garde que le texte des messages précédents pour simplifier le contexte
   const simplifiedHistory = chatHistory.slice(-10).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content || "..." }] // Force un texte même si vide
+    parts: [{ text: msg.content || "..." }] 
   }));
 
   const currentParts: any[] = [];
@@ -138,10 +136,10 @@ export const chatWithAI = async (
     
     RÈGLES :
     1. Sois naturelle et conversationnelle (comme un humain).
-    2. Si l'utilisateur demande un plan, utilise l'outil 'propose_meal_plan_concept'.
-    3. Si l'utilisateur donne une info (poids, sport), utilise les outils correspondants.
-    4. IMPORTANT : Si tu ne peux pas utiliser un outil pour une raison quelconque, RÉPONDS JUSTE PAR TEXTE. Ne plante pas.
-    5. Si l'utilisateur demande "7 repas répétés sur un mois", utilise 'propose_meal_plan_concept' avec une 'weeklyPreview' de 7 jours, et mets dans la description que ce sera répété.
+    2. Si l'utilisateur demande un plan, utilise l'outil 'propose_meal_plan_concept' avec une semaine type.
+    3. Si l'utilisateur dit "Pas de petit déjeuner", laisse le champ 'breakfast' vide dans l'outil.
+    4. Si l'utilisateur demande "7 repas répétés", propose une 'weeklyPreview' de 7 jours dans l'outil.
+    5. IMPORTANT : Si tu ne peux pas utiliser un outil, RÉPONDS JUSTE PAR TEXTE.
     `;
 
     const response = await ai.models.generateContent({
@@ -161,13 +159,11 @@ export const chatWithAI = async (
       actionLog: [] as any[] 
     };
 
-    // Traitement des outils (si ça a marché)
     if (response.functionCalls) {
       for (const call of response.functionCalls) {
         if (call.name === 'update_user_profile') result.extractedInfo = { ...result.extractedInfo, ...call.args };
         if (call.name === 'propose_meal_plan_concept') {
           result.suggestedConcept = call.args;
-          // Valeur par défaut pour éviter crash UI
           if (!result.suggestedConcept.startDate) result.suggestedConcept.startDate = new Date(Date.now() + 86400000).toISOString().split('T')[0];
         }
         if (call.name === 'log_workout') result.actionLog.push({ type: 'workout', data: call.args });
@@ -176,12 +172,10 @@ export const chatWithAI = async (
       }
     }
 
-    // Si on a un concept mais pas de texte, on ajoute un texte générique
     if (!result.reply && result.suggestedConcept) {
-      result.reply = `Voici une proposition pour votre demande ! Qu'en pensez-vous ?`;
+      result.reply = `J'ai préparé une ébauche de semaine type ! Cliquez sur "Valider" pour l'étendre à tout le mois, ou demandez-moi des modifications.`;
     }
 
-    // Si vraiment rien (ni texte ni outil), on lance une erreur pour déclencher le fallback
     if (!result.reply && !result.suggestedConcept && result.actionLog.length === 0) {
       throw new Error("Empty response");
     }
@@ -189,39 +183,88 @@ export const chatWithAI = async (
     return result;
 
   } catch (error) {
-    console.warn("Mode Outils échoué, passage en mode conversationnel pur (Fallback ChatGPT-style)", error);
-
+    console.warn("Fallback Mode Texte", error);
     // --- TENTATIVE 2 : MODE TEXTE SEUL (Fallback) ---
-    // Si la logique complexe plante, on demande juste à l'IA de répondre à la question par texte.
-    // C'est ce qui garantit que l'utilisateur a toujours une réponse.
     try {
         const fallbackResponse = await ai.models.generateContent({
-            model: modelName, // On reste sur Flash pour la vitesse
+            model: modelName,
             contents: [...simplifiedHistory, { role: 'user', parts: currentParts }],
             config: {
-                systemInstruction: "Tu es un assistant nutritionnel utile. Réponds à la demande de l'utilisateur par texte simplement. Ne cherche pas à utiliser d'outils complexes, donne juste les conseils ou les menus demandés sous forme de liste texte.",
-                // PAS D'OUTILS ICI
+                systemInstruction: "Tu es un assistant nutritionnel. L'utilisateur a rencontré une erreur technique avec l'interface visuelle. Réponds simplement à sa demande par texte (liste de repas, conseils, etc).",
             }
         });
 
         return {
-            reply: fallbackResponse.text || "Je vous ai compris, mais je préfère vous répondre par écrit pour le moment. Que souhaitez-vous savoir exactement ?",
+            reply: fallbackResponse.text || "Je vous ai compris, mais je préfère vous répondre par écrit pour le moment.",
             extractedInfo: {},
             suggestedConcept: undefined,
             actionLog: []
         };
     } catch (finalError) {
-        return { reply: "Je suis là, mais j'ai un peu de mal à traiter cette demande spécifique. Pouvons-nous essayer une question plus simple ?" };
+        return { reply: "Je suis là. Que souhaitez-vous manger ?" };
     }
   }
 };
 
 // --- GÉNÉRATION DU PLAN COMPLET (30 Jours) ---
+// VERSION OPTIMISÉE : Si une semaine type existe, on la duplique mathématiquement pour éviter les erreurs d'IA.
 export const generateMealPlan = async (concept: any, user: User): Promise<MealPlan> => {
+  const startDate = concept.startDate || new Date().toISOString().split('T')[0];
+
+  // STRATÉGIE RAPIDE : Construction locale si la preview existe
+  // Cela garantit le succès à 100% pour les demandes "répéter 7 repas"
+  if (concept.weeklyPreview && Array.isArray(concept.weeklyPreview) && concept.weeklyPreview.length > 0) {
+    console.log("Génération algorithmique locale (rapide)...");
+    
+    const days: any[] = [];
+    const recipes: Recipe[] = [];
+    const recipeMap = new Map<string, string>(); // Nom -> ID
+
+    // Fonction utilitaire pour créer/récupérer une recette
+    const getOrCreateRecipeId = (mealName: string, calories: number = 500): string => {
+       if (!mealName) return "";
+       if (recipeMap.has(mealName)) return recipeMap.get(mealName)!;
+       
+       const id = `rec_${Math.random().toString(36).substr(2, 9)}`;
+       recipes.push({
+         id,
+         name: mealName,
+         calories: calories, // Estimation par défaut si pas fournie
+         ingredients: [{ item: mealName, amount: "1 portion" }],
+         steps: ["Préparer les ingrédients.", "Cuisiner selon vos préférences.", "Servir chaud."],
+         totalWeight: "400g"
+       });
+       recipeMap.set(mealName, id);
+       return id;
+    };
+
+    // On génère 30 jours en bouclant sur la preview
+    for (let i = 0; i < 30; i++) {
+       // On trouve le jour correspondant dans la preview (modulo la longueur de la preview)
+       // Ex: si preview a 7 jours, jour 8 reprend le jour 1
+       const templateDayIndex = i % concept.weeklyPreview.length;
+       const templateDay = concept.weeklyPreview[templateDayIndex];
+
+       days.push({
+         day: i + 1,
+         breakfast: templateDay.breakfast ? getOrCreateRecipeId(templateDay.breakfast, 400) : undefined,
+         lunch: getOrCreateRecipeId(templateDay.lunch || "Déjeuner équilibré", 700),
+         snack: templateDay.snack ? getOrCreateRecipeId(templateDay.snack, 200) : undefined,
+         dinner: getOrCreateRecipeId(templateDay.dinner || "Dîner léger", 500),
+       });
+    }
+
+    return {
+      startDate,
+      days,
+      recipes
+    };
+  }
+
+  // FALLBACK IA : Uniquement si pas de preview visuelle (cas rare)
   if (!process.env.API_KEY) throw new Error("API Key manquante");
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Schéma simplifié pour garantir la génération JSON
   const MEAL_PLAN_SCHEMA: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -261,34 +304,11 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
     }
   };
 
-  const startDate = concept.startDate || new Date().toISOString().split('T')[0];
-  
-  // Construction du prompt intelligent
-  let previewStr = "";
-  if (concept.weeklyPreview && Array.isArray(concept.weeklyPreview)) {
-      previewStr = concept.weeklyPreview.map((d: any) => 
-        `Jour Type ${d.day}: Matin=${d.breakfast || 'Non'}, Midi=${d.lunch}, Soir=${d.dinner}`
-      ).join('\n');
-  }
-
-  const prompt = `Génère un plan de repas de 30 jours (JSON).
-  
-  TITRE: ${concept.title}
-  INFO: ${concept.description}
-  DÉBUT: ${startDate}
-  
-  MODÈLE DE BASE (à répéter ou varier selon la demande) :
-  ${previewStr}
-  
-  INSTRUCTIONS :
-  1. Si le titre mentionne "répété", répète les repas de la semaine type sur tout le mois.
-  2. Sinon, varie les plaisirs.
-  3. Génère bien 30 jours complets.
-  `;
+  const prompt = `Génère un plan de repas de 30 jours (JSON). TITRE: ${concept.title}. DÉBUT: ${startDate}. Si tu n'as pas de détails précis, invente des recettes saines.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // On garde Pro pour le JSON complexe
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -298,18 +318,9 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
     
     const result = JSON.parse(response.text || '{}');
     result.startDate = startDate;
-    
-    if(result.recipes) {
-        result.recipes.forEach((r: any, idx: number) => {
-            if(!r.id) r.id = `rec_${idx}`;
-            if(!r.totalWeight) r.totalWeight = "400g";
-        });
-    }
-
     return result;
   } catch (error) {
-    console.error("Erreur Planification:", error);
-    // Si le JSON échoue, on ne plante pas tout l'app, on renvoie une erreur propre
-    throw new Error("La génération du calendrier a échoué. Essayez de demander quelque chose de plus simple pour commencer.");
+    console.error("Erreur Planification IA:", error);
+    throw new Error("Génération échouée");
   }
 };

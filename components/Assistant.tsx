@@ -135,30 +135,19 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       // 2. Traitement des actions spéciales (Sport / Hydratation / Repas)
       if (response.actionLog && response.actionLog.length > 0) {
         for (const action of response.actionLog) {
-          
           if (action.type === 'workout') {
             const data = action.data;
-            const factorMap: Record<string, number> = { 
-               RUNNING: 10, CYCLING: 8, SWIMMING: 9, WALKING: 4, 
-               WEIGHTLIFTING: 6, CROSSFIT: 11, HIIT: 12, YOGA: 3, 
-               PILATES: 4, TEAM_SPORTS: 8 
-            };
-            const factor = factorMap[data.type] || 5;
-            const intensityMult = data.intensity === 'high' ? 1.2 : data.intensity === 'low' ? 0.8 : 1.0;
-            const calories = Math.round(data.duration * factor * intensityMult);
-
             const newWorkout: WorkoutSession = {
               id: Math.random().toString(36).substr(2, 9),
               date: new Date().toISOString(),
-              type: data.type,
-              duration: data.duration,
+              type: data.type || 'ACTIVITY',
+              duration: data.duration || 30,
               intensity: data.intensity || 'medium',
-              caloriesBurned: calories
+              caloriesBurned: data.caloriesEstimate || 200
             };
             updatedUser.workouts = [newWorkout, ...(updatedUser.workouts || [])];
             hasUpdates = true;
           }
-          
           if (action.type === 'hydration') {
              const newRecord: HydrationRecord = {
                date: new Date().toISOString(),
@@ -167,7 +156,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
              updatedUser.hydrationRecords = [...(updatedUser.hydrationRecords || []), newRecord];
              hasUpdates = true;
           }
-
           if (action.type === 'meal') {
              const newMeal: EatenMealRecord = {
                id: Math.random().toString(36).substr(2, 9),
@@ -175,7 +163,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                name: action.data.name,
                calories: action.data.calories,
                mealType: action.data.mealType || 'snack',
-               imageUrl: userImage || undefined // On attache l'image si elle existe
+               imageUrl: userImage || undefined 
              };
              updatedUser.eatenMeals = [...(updatedUser.eatenMeals || []), newMeal];
              hasUpdates = true;
@@ -202,13 +190,14 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     }
   };
 
+  // NOUVELLE LOGIQUE : Si le plan visuel échoue, on demande le texte (ChatGPT-style)
   const handleGeneratePlan = async (concept: any) => {
     if (isGeneratingPlan) return;
     setIsGeneratingPlan(true);
 
     setMessages(prev => [...prev, { 
       role: 'assistant', 
-      content: `Parfait ! Je génère le plan de 30 jours basé sur cette semaine type (incluant tous vos repas). Cela prend environ 20 secondes...`, 
+      content: `Je finalise votre programme de 30 jours...`, 
       timestamp: new Date() 
     }]);
 
@@ -217,16 +206,26 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       setMealPlan(plan);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: "✅ Votre programme complet est prêt ! Consultez l'onglet 'Agenda' pour voir le mois entier.", 
+        content: "✅ Votre programme est validé ! Retrouvez-le dans l'onglet Agenda et Cuisine.", 
         timestamp: new Date() 
       }]);
     } catch (e) {
       console.error(e);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: "Oups, la génération a échoué. Veuillez réessayer.", 
-        timestamp: new Date() 
-      }]);
+      // FALLBACK : Au lieu de dire "Erreur", on demande à l'IA de l'écrire en texte
+      try {
+        const textResponse = await chatWithAI("La génération du calendrier visuel a échoué. Peux-tu m'écrire le plan détaillé (repas par repas) sous forme de liste texte simple à la place ? Sois exhaustif.", user, messages, dailyContext);
+        setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: "Le calendrier interactif n'a pas pu être chargé, mais voici votre plan détaillé par écrit :\n\n" + textResponse.reply, 
+            timestamp: new Date() 
+        }]);
+      } catch (err) {
+         setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: "Oups, je n'arrive vraiment pas à générer ce plan. Essayons avec une demande plus simple ?", 
+            timestamp: new Date() 
+        }]);
+      }
     } finally {
       setIsGeneratingPlan(false);
     }
@@ -387,7 +386,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                         
                         <p className="text-emerald-700 text-xs mb-4">{msg.concept.description}</p>
                         
-                        {/* Weekly Preview Grid - CORRIGÉ: Flex col pour éviter la coupure de texte */}
+                        {/* Weekly Preview Grid */}
                         {msg.concept.weeklyPreview && (
                            <div className="grid gap-3 mb-4">
                               {msg.concept.weeklyPreview.map((day, idx) => (
@@ -395,52 +394,27 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                                     <div className="w-full border-b border-emerald-100/50 pb-1 mb-1">
                                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-100 px-2 py-1 rounded-md">Jour {day.day}</span>
                                     </div>
-                                    
                                     <div className="grid gap-2 text-xs">
-                                       {/* Petit Déjeuner (Optionnel) */}
                                        {day.breakfast && (
                                          <div className="flex items-start gap-2">
                                             <span className="text-amber-400 text-sm mt-0.5">🥐</span>
                                             <div>
-                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">
-                                                Matin {day.breakfastWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.breakfastWeight})</span>}
-                                              </span>
+                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Matin {day.breakfastWeight && `(${day.breakfastWeight})`}</span>
                                               <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.breakfast}</span>
                                             </div>
                                          </div>
                                        )}
-
-                                       {/* Déjeuner */}
                                        <div className="flex items-start gap-2">
                                           <span className="text-amber-500 text-sm mt-0.5">☀️</span>
                                           <div>
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">
-                                              Midi {day.lunchWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.lunchWeight})</span>}
-                                            </span>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Midi {day.lunchWeight && `(${day.lunchWeight})`}</span>
                                             <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.lunch}</span>
                                           </div>
                                        </div>
-
-                                       {/* Collation (Optionnel) */}
-                                       {day.snack && (
-                                         <div className="flex items-start gap-2">
-                                            <span className="text-pink-400 text-sm mt-0.5">🍎</span>
-                                            <div>
-                                              <span className="text-[9px] font-bold text-slate-400 uppercase block">
-                                                Collation {day.snackWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.snackWeight})</span>}
-                                              </span>
-                                              <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.snack}</span>
-                                            </div>
-                                         </div>
-                                       )}
-
-                                       {/* Dîner */}
                                        <div className="flex items-start gap-2">
                                           <span className="text-indigo-500 text-sm mt-0.5">🌙</span>
                                           <div>
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">
-                                              Soir {day.dinnerWeight && <span className="text-slate-500 font-medium normal-case tracking-normal">({day.dinnerWeight})</span>}
-                                            </span>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Soir {day.dinnerWeight && `(${day.dinnerWeight})`}</span>
                                             <span className="text-slate-800 font-medium whitespace-normal break-words leading-tight">{day.dinner}</span>
                                           </div>
                                        </div>
@@ -451,7 +425,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                         )}
                         
                         <div className="flex flex-col gap-2 mt-2">
-                           <p className="text-[10px] text-emerald-600 text-center italic mb-1">Satisfait ? Cliquez pour étendre ce modèle sur 30 jours.</p>
+                           <p className="text-[10px] text-emerald-600 text-center italic mb-1">Si ça vous convient, je duplique ce plan sur tout le mois.</p>
                            <button 
                              onClick={() => handleGeneratePlan(msg.concept)}
                              disabled={isGeneratingPlan}
@@ -461,7 +435,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl active:scale-95'
                              }`}
                            >
-                              {isGeneratingPlan ? 'Génération...' : '✅ Valider & Générer le Mois'}
+                              {isGeneratingPlan ? 'Création en cours...' : '✅ Valider & Générer le Mois'}
                            </button>
                         </div>
                      </div>
