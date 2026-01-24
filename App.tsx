@@ -18,8 +18,12 @@ import { NotificationService } from './services/NotificationService';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  proposedPlan?: MealPlan;
-  proposedShortList?: string[];
+  concept?: {
+    title: string;
+    description: string;
+    exampleMeals: string[];
+  };
+  timestamp?: Date;
 }
 
 const App: React.FC = () => {
@@ -66,7 +70,14 @@ const App: React.FC = () => {
       const data = await CloudSyncService.pullData();
       if (data && (force || data._last_sync > lastSyncRef.current)) {
         if (data.mealPlan) setMealPlan(data.mealPlan);
-        if (data.chatMessages) setChatMessages(data.chatMessages);
+        // Important: Reconstituer les dates des messages car JSON stringify les perd
+        if (data.chatMessages) {
+          const hydratedMessages = data.chatMessages.map((m: any) => ({
+             ...m,
+             timestamp: m.timestamp ? new Date(m.timestamp) : undefined
+          }));
+          setChatMessages(hydratedMessages);
+        }
         if (data.historyLogs) setHistoryLogs(data.historyLogs);
         if (data.userData && user) setUser(prev => ({ ...prev!, ...data.userData }));
         lastSyncRef.current = data._last_sync || Date.now();
@@ -111,7 +122,13 @@ const App: React.FC = () => {
         setUser(savedUser);
         CloudSyncService.setUserId(savedUser.googleId || savedUser.id);
         if (savedPlan) setMealPlan(savedPlan);
-        if (savedChat) setChatMessages(savedChat);
+        if (savedChat) {
+           const hydratedChat = savedChat.map((m: any) => ({
+             ...m,
+             timestamp: m.timestamp ? new Date(m.timestamp) : undefined
+           }));
+           setChatMessages(hydratedChat);
+        }
         await syncWithCloud(true);
       }
       setIsReady(true);
@@ -160,11 +177,13 @@ const App: React.FC = () => {
       />
       
       {/* 
-        Container Principal avec calcul de hauteur précis pour mobile
-        pt-16 compense le header fixe
+        Container Principal 
+        pt-16 pour compenser le header fixe
+        height calculée : 100dvh (viewport) - 64px (header)
+        Cela garantit que l'intérieur (Assistant) peut scroller indépendamment
       */}
-      <main className={`flex-1 min-w-0 relative flex flex-col pt-16 transition-all duration-300 ${isAssistant ? 'overflow-hidden' : 'overflow-y-auto no-scrollbar'}`}>
-        <div className={`w-full h-full ${isAssistant ? '' : 'p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
+      <main className="flex-1 pt-16 h-full overflow-hidden">
+        <div className={`w-full h-full ${isAssistant ? '' : 'overflow-y-auto p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
           {isAssistant && (
             <Assistant 
               setMealPlan={setMealPlan} 
