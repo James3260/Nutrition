@@ -6,7 +6,7 @@ import { MealPlan, User } from "../types";
 
 export const updateUserTool: FunctionDeclaration = {
   name: "update_user_profile",
-  description: "Enregistre les données utilisateur.",
+  description: "Enregistre les préférences et données utilisateur (poids, allergies, etc).",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -15,42 +15,42 @@ export const updateUserTool: FunctionDeclaration = {
       age: { type: Type.NUMBER },
       gender: { type: Type.STRING },
       goal: { type: Type.STRING },
-      exclusions: { type: Type.ARRAY, items: { type: Type.STRING } },
+      exclusions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Liste des ingrédients exclus/allergies" },
       startDate: { type: Type.STRING }
     }
   }
 };
 
-// Schéma ULTRA permissif pour éviter les erreurs de validation
+// Outil de proposition visuelle (Semainier)
 export const proposeConceptTool: FunctionDeclaration = {
   name: "propose_meal_plan_concept",
-  description: "Génère un plan repas. Utiliser dès qu'une demande de menu est faite.",
+  description: "Affiche ou met à jour le SEMAINIER TYPE (7 jours) pour validation visuelle par l'utilisateur.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: "Titre du plan" },
-      description: { type: Type.STRING, description: "Description courte" },
+      title: { type: Type.STRING, description: "Titre du plan (ex: 'Semaine Équilibre & Budget')" },
+      description: { type: Type.STRING, description: "Résumé de la stratégie (ex: 'Sans petit-déj, focus dîner léger')." },
       startDate: { type: Type.STRING, description: "YYYY-MM-DD" },
       weeklyPreview: { 
         type: Type.ARRAY, 
+        description: "Liste des 7 jours types.",
         items: {
           type: Type.OBJECT,
           properties: {
             day: { type: Type.INTEGER },
-            breakfast: { type: Type.STRING },
+            breakfast: { type: Type.STRING, description: "Laisser vide si l'utilisateur ne prend pas de petit-déj" },
             breakfastWeight: { type: Type.STRING },
             lunch: { type: Type.STRING },
             lunchWeight: { type: Type.STRING },
-            snack: { type: Type.STRING },
+            snack: { type: Type.STRING, description: "Laisser vide si pas de collation demandée" },
             snackWeight: { type: Type.STRING },
             dinner: { type: Type.STRING },
             dinnerWeight: { type: Type.STRING }
           }
-          // AUCUN champ required ici pour éviter le crash si l'IA oublie un poids
         }
       }
     },
-    required: ["title", "description"] // Seuls titre et description sont obligatoires
+    required: ["title", "description", "weeklyPreview"]
   }
 };
 
@@ -116,32 +116,46 @@ export const chatWithAI = async (
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  // Utilisation de Flash pour la rapidité et réduire les erreurs de "surcharge"
   const modelName = 'gemini-3-flash-preview'; 
 
   const contextStr = context ? `
   STATS LIVE:
   - Eau: ${context.hydrationCurrent}/${context.hydrationGoal}ml.
   - Cal. Mangées: ${context.caloriesEaten}.
-  - Cal. Brûlées: ${context.caloriesBurned}.
   ` : '';
 
   const todayDate = new Date().toISOString().split('T')[0];
   const tomorrowDate = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-  // INSTRUCTIONS : LIBERTÉ TOTALE ET TOLÉRANCE BUDGETAIRE
-  const systemInstruction = `Tu es Crystal, une IA Nutritionniste "No-Limits".
+  // INSTRUCTIONS SYSTÈME : PROCESSUS INTERACTIF DE VALIDATION
+  const systemInstruction = `Tu es Crystal, Chef Nutritionniste & Coach.
   
-  RÈGLES ABSOLUES (POUR ÉVITER LES ERREURS) :
-  1. ACCEPTE TOUT CHALLENGE : Si on te demande "7 repas pour 20€", C'EST POSSIBLE. Ne refuse jamais.
-  2. MODE "SURVIE" : Pour les petits budgets, propose des œufs, du riz, des pâtes, des haricots, des légumes surgelés. Fais simple.
-  3. DONNÉES MANQUANTES : Si l'utilisateur ne donne pas de date, utilise ${tomorrowDate}. Si tu ne sais pas le poids d'un plat, invente une estimation réaliste (ex: 400g).
-  4. OUTILS : Utilise 'propose_meal_plan_concept' pour répondre aux demandes de menus. Remplis les champs comme tu peux.
-  5. NE BLOQUE JAMAIS : Mieux vaut une réponse approximative qu'un refus.
+  TON OBJECTIF : Construire le plan parfait AVEC l'utilisateur. Ne génère pas le mois complet tout de suite. Procède par étapes.
 
-  PROFIL : ${user.name}, Objectif : ${user.goal || 'Forme'}.
+  PROCESSUS OBLIGATOIRE (Si demande de plan/menu) :
+  1. **PROPOSITION INITIALE (Draft)** : Utilise IMMÉDIATEMENT l'outil 'propose_meal_plan_concept' pour afficher une semaine type (7 jours).
+     - Si budget serré : Propose des plats économiques.
+     - Par défaut : Mets Déjeuner + Dîner.
+  
+  2. **QUESTIONNEMENT STRATÉGIQUE** : Accompagne TOUJOURS ta proposition visuelle de questions pour affiner :
+     - "Voulez-vous inclure un **Petit-Déjeuner** ?"
+     - "Avez-vous besoin de **Collations** ou de **Desserts** ?"
+     - "Y a-t-il des **ingrédients interdits** ou des allergies ?"
+  
+  3. **ITÉRATION** :
+     - Si l'utilisateur répond "Ajoute le petit-déj" -> Rappelle 'propose_meal_plan_concept' avec les petits-déjeuners ajoutés.
+     - Si l'utilisateur dit "Pas de porc" -> Mets à jour le profil (update_user_profile) ET rappelle 'propose_meal_plan_concept' avec des repas sans porc.
+     - Si l'utilisateur demande "Change le mardi midi par une Pizza" -> Modifie le jour spécifique dans l'outil.
+
+  4. **VALIDATION** : Une fois que l'utilisateur semble satisfait de la semaine type affichée, invite-le à cliquer sur "Valider & Générer le Mois".
+
+  RÈGLES D'OR :
+  - Sois force de proposition. Ne dis pas "Que voulez-vous manger ?", dis "Voici une proposition, on l'ajuste ?"
+  - Remplis les grammages (lunchWeight, etc.) avec des estimations réalistes.
+  - Si aucune date n'est donnée, commence le ${tomorrowDate}.
+
+  PROFIL : ${user.name}, Allergies connues: ${user.exclusions?.join(', ') || 'Aucune'}.
   ${contextStr}
-  DATE : ${todayDate}.
   `;
 
   const contents: { role: string, parts: any[] }[] = chatHistory.slice(-15).map(msg => {
@@ -198,7 +212,6 @@ export const chatWithAI = async (
         }
         if (call.name === 'propose_meal_plan_concept') {
           result.suggestedConcept = call.args;
-          // Sécurité : Si startDate manque, on met demain
           if (!result.suggestedConcept.startDate) {
              result.suggestedConcept.startDate = tomorrowDate;
           }
@@ -209,9 +222,9 @@ export const chatWithAI = async (
       }
     }
 
-    // Fallback intelligent
+    // Fallback texte si outil activé sans texte
     if (!result.reply && result.suggestedConcept) {
-      result.reply = `C'est prêt ! Voici un plan "${result.suggestedConcept.title}" adapté à votre demande.`;
+      result.reply = `Voici une première ébauche pour votre semaine ! 🥗\n\nSouhaitez-vous que j'ajoute des **petits-déjeuners** ou des **collations** ? Avez-vous des intolérances particulières ?`;
     } else if (!result.reply) {
       result.reply = "Je mets à jour vos données.";
     }
@@ -220,19 +233,17 @@ export const chatWithAI = async (
 
   } catch (error) {
     console.error("Chat error:", error);
-    // Au lieu de dire "Erreur", on fait semblant de continuer la conversation pour ne pas frustrer l'utilisateur
     return { 
-      reply: "Je vois ! C'est un défi intéressant. Pourriez-vous juste me confirmer si vous avez des allergies avant que je finalise le menu ?" 
+      reply: "J'ai eu un petit souci de connexion. Pouvez-vous me redire si vous voulez inclure le petit-déjeuner ?" 
     };
   }
 };
 
-// --- GÉNÉRATION DU PLAN COMPLET ---
+// --- GÉNÉRATION DU PLAN COMPLET (30 Jours) ---
 export const generateMealPlan = async (concept: any, user: User): Promise<MealPlan> => {
   if (!process.env.API_KEY) throw new Error("API Key manquante");
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Schéma simplifié pour garantir la génération JSON
   const MEAL_PLAN_SCHEMA: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -274,15 +285,19 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
 
   const startDate = concept.startDate || new Date().toISOString().split('T')[0];
   
-  // On construit un résumé textuel pour aider le modèle
-  let previewStr = "Menu validé : \n";
+  // Analyse de la structure validée pour la répliquer sur le mois
+  const hasBreakfast = concept.weeklyPreview?.some((d: any) => d.breakfast);
+  const hasSnack = concept.weeklyPreview?.some((d: any) => d.snack);
+
+  // Construction du résumé pour le prompt
+  let previewStr = "STRUCTURE VALIDÉE (SEMAINE TYPE) : \n";
   if (concept.weeklyPreview && Array.isArray(concept.weeklyPreview)) {
       previewStr += concept.weeklyPreview.map((d: any) => 
-        `J${d.day}: Midi=${d.lunch || 'Libre'}, Soir=${d.dinner || 'Libre'}`
+        `J${d.day}: Matin=${d.breakfast || 'NON'}, Midi=${d.lunch}, Snack=${d.snack || 'NON'}, Soir=${d.dinner}`
       ).join('\n');
   }
 
-  const prompt = `Génère un plan de repas complet de 30 jours (JSON).
+  const prompt = `GÉNÈRE LE PLAN FINAL DE 30 JOURS (JSON).
   
   TITRE: ${concept.title}
   INFO: ${concept.description}
@@ -290,15 +305,16 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
   
   ${previewStr}
   
-  INSTRUCTIONS :
-  1. Génère 30 jours.
-  2. Si le budget est serré (mentionné dans le titre), utilise des ingrédients TRES simples et pas chers (oeufs, riz, etc).
-  3. Fais des recettes simples.
+  INSTRUCTIONS STRICTES :
+  1. STRUCTURE : ${hasBreakfast ? "GÉNÈRE IMPÉRATIVEMENT un 'breakfast' pour CHAQUE jour du mois." : "NE GÉNÈRE PAS de petit-déjeuner (laisser vide)."}
+  2. STRUCTURE : ${hasSnack ? "GÉNÈRE IMPÉRATIVEMENT un 'snack' pour CHAQUE jour du mois." : "NE GÉNÈRE PAS de collation (laisser vide)."}
+  3. DIVERSITÉ : Utilise la "Semaine Type" comme base pour le style, mais varie les recettes sur les 30 jours pour ne pas manger la même chose tout le temps, tout en respectant le budget/thème.
+  4. EXCLUSIONS : Respecte strictement les allergies : ${user.exclusions?.join(', ') || 'Aucune'}.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // On garde le PRO pour la génération du JSON complexe
+      model: 'gemini-3-pro-preview', 
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -309,7 +325,6 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
     const result = JSON.parse(response.text || '{}');
     result.startDate = startDate;
     
-    // Fallback si l'IA oublie les IDs
     if(result.recipes) {
         result.recipes.forEach((r: any, idx: number) => {
             if(!r.id) r.id = `rec_${idx}`;
@@ -320,6 +335,6 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
     return result;
   } catch (error) {
     console.error("Erreur Planification:", error);
-    throw new Error("La génération du plan a échoué. Réessayez avec une demande plus simple.");
+    throw new Error("La génération a échoué. Veuillez réessayer.");
   }
 };
