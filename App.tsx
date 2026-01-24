@@ -110,39 +110,76 @@ const App: React.FC = () => {
     }
   }, [chatMessages, mealPlan, historyLogs, isSyncing, user]);
 
+  // INITIALISATION OPTIMISÉE
   useEffect(() => {
+    let isMounted = true;
+    
     const init = async () => {
-      CloudSyncService.init();
-      const savedUser = await StorageService.loadData('current_user');
-      const savedPlan = await StorageService.loadData('plan');
-      const savedChat = await StorageService.loadData('chat_history');
-      const savedIcon = await StorageService.loadData('app_custom_icon');
-      if (savedIcon) IconService.applyIcon(savedIcon);
-      if (savedUser) {
-        setUser(savedUser);
-        CloudSyncService.setUserId(savedUser.googleId || savedUser.id);
-        if (savedPlan) setMealPlan(savedPlan);
-        if (savedChat) {
-           const hydratedChat = savedChat.map((m: any) => ({
-             ...m,
-             timestamp: m.timestamp ? new Date(m.timestamp) : undefined
-           }));
-           setChatMessages(hydratedChat);
+      // Sécurité : Si dans 3 secondes ce n'est pas chargé, on force l'affichage
+      const safetyTimeout = setTimeout(() => {
+        if (isMounted) {
+            console.warn("Délai d'initialisation dépassé, affichage forcé.");
+            setIsReady(true);
         }
-        await syncWithCloud(true);
-      }
-      setIsReady(true);
-    };
-    init();
-  }, [syncWithCloud]);
+      }, 3000);
 
+      try {
+        CloudSyncService.init();
+        
+        // 1. Chargement local (Rapide)
+        const [savedUser, savedPlan, savedChat, savedIcon] = await Promise.all([
+            StorageService.loadData('current_user'),
+            StorageService.loadData('plan'),
+            StorageService.loadData('chat_history'),
+            StorageService.loadData('app_custom_icon')
+        ]);
+
+        if (!isMounted) return;
+
+        if (savedIcon) IconService.applyIcon(savedIcon);
+        
+        if (savedUser) {
+          setUser(savedUser);
+          CloudSyncService.setUserId(savedUser.googleId || savedUser.id);
+          
+          if (savedPlan) setMealPlan(savedPlan);
+          
+          if (savedChat) {
+             const hydratedChat = savedChat.map((m: any) => ({
+               ...m,
+               timestamp: m.timestamp ? new Date(m.timestamp) : undefined
+             }));
+             setChatMessages(hydratedChat);
+          }
+        }
+
+        // 2. On affiche l'interface IMMÉDIATEMENT avec les données locales
+        clearTimeout(safetyTimeout);
+        setIsReady(true);
+
+        // 3. Synchronisation Cloud en ARRIÈRE-PLAN (ne bloque pas l'interface)
+        if (savedUser) {
+           syncWithCloud(true).catch(err => console.warn("Background sync error:", err));
+        }
+
+      } catch (error) {
+        console.error("Erreur critique init:", error);
+        // En cas d'erreur, on affiche quand même l'app pour ne pas bloquer l'utilisateur
+        if (isMounted) setIsReady(true);
+      }
+    };
+
+    init();
+    return () => { isMounted = false; };
+  }, []); // Dépendance vide pour ne s'exécuter qu'au montage
+
+  // Sauvegarde automatique
   useEffect(() => {
     if (isReady && user) {
       StorageService.saveData('current_user', user);
       if (mealPlan) StorageService.saveData('plan', mealPlan);
       
       // FIX CRITIQUE : On sauvegarde TOUJOURS l'historique, même s'il est vide []
-      // Cela permet à "Nouvelle conversation" d'écraser les anciennes données.
       StorageService.saveData('chat_history', chatMessages);
       
       const timer = setTimeout(() => pushToCloud(), 3000);
@@ -159,8 +196,11 @@ const App: React.FC = () => {
   };
 
   if (!isReady) return (
-    <div className="h-screen flex items-center justify-center bg-white text-emerald-500 font-bold">
-      NutriTrack AI...
+    <div className="h-screen flex items-center justify-center bg-white text-emerald-500 font-bold animate-pulse">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
+        <span>NutriTrack AI...</span>
+      </div>
     </div>
   );
 
@@ -180,11 +220,6 @@ const App: React.FC = () => {
         onCloudRestore={() => syncWithCloud(true)}
       />
       
-      {/* 
-        Container Principal
-        Utilisation de mt-16 au lieu de pt-16 pour séparer proprement du header fixe.
-        flex-1 et min-h-0 garantissent que le scroll interne fonctionne sur Safari/iOS.
-      */}
       <main className="flex-1 mt-16 flex flex-col min-h-0 overflow-hidden relative">
         <div className={`flex-1 w-full min-h-0 ${isAssistant ? 'overflow-hidden flex flex-col' : 'overflow-y-auto p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto'}`}>
           {isAssistant && (
