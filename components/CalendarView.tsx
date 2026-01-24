@@ -42,12 +42,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
     return days;
   }, [currentDate]);
 
+  // Logique de mappage : Date Réelle -> Index du plan
   const mealMap = useMemo(() => {
     if (!mealPlan || !mealPlan.startDate) return new Map<string, number>();
     const map = new Map<string, number>();
     const start = new Date(mealPlan.startDate);
     start.setHours(0, 0, 0, 0);
 
+    // On mappe chaque jour du plan (0 à 29) vers une date réelle stringifiée
     mealPlan.days.forEach((dayPlan, index) => {
       const d = new Date(start);
       d.setDate(start.getDate() + index);
@@ -66,7 +68,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
         <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-50 rounded-full flex items-center justify-center text-4xl sm:text-5xl mb-6 float shadow-sm">🗓️</div>
         <p className="text-slate-900 font-black text-lg sm:text-xl">Planification inactive</p>
         <p className="text-slate-400 text-[10px] sm:text-sm mt-2 max-w-xs leading-relaxed font-medium">
-          Demandez à l'assistant de générer votre programme pour voir votre calendrier mensuel personnalisé.
+          Demandez à l'assistant de générer votre programme en précisant une date de début pour voir votre calendrier.
         </p>
       </div>
     );
@@ -74,7 +76,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight">Agenda Nutrition</h2>
           <p className="text-slate-400 font-bold mt-1 uppercase tracking-widest text-[9px] sm:text-[10px]">
@@ -82,20 +84,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
           </p>
         </div>
         
-        <div className="flex items-center gap-1 sm:gap-2 bg-white p-1 sm:p-1.5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 self-start sm:self-center">
-          <button onClick={prevMonth} className="p-2 hover:bg-slate-50 rounded-lg transition-all text-slate-400 hover:text-emerald-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:h-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+        {/* Navigation Mois Améliorée */}
+        <div className="flex items-center justify-between md:justify-end gap-4 bg-white p-2 rounded-[1.5rem] shadow-lg shadow-slate-100 border border-slate-100">
+          <button onClick={prevMonth} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-all active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <div className="px-1 sm:px-4 min-w-[100px] sm:min-w-[140px] text-center">
-            <span className="text-[9px] sm:text-sm font-black text-slate-800 uppercase tracking-widest">
-              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+          
+          <div className="flex flex-col items-center min-w-[120px]">
+            <span className="text-sm font-black text-slate-800 uppercase tracking-widest">
+              {monthNames[currentDate.getMonth()]}
+            </span>
+            <span className="text-[10px] font-bold text-slate-400">
+              {currentDate.getFullYear()}
             </span>
           </div>
-          <button onClick={nextMonth} className="p-2 hover:bg-slate-50 rounded-lg transition-all text-slate-400 hover:text-emerald-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:h-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+
+          <button onClick={nextMonth} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-all active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
           </button>
-          <div className="w-px h-5 bg-slate-100 mx-1 hidden sm:block"></div>
-          <button onClick={goToToday} className="hidden sm:inline-block px-3 py-2 text-[10px] font-black text-emerald-600 uppercase hover:bg-emerald-50 rounded-xl transition-all">Today</button>
         </div>
       </div>
 
@@ -126,33 +132,29 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
               <div 
                 key={dateStr} 
                 onClick={() => hasMeals && setSelectedDayInfo({ day: mealPlanIndex!, date: date })}
-                className={`aspect-square sm:min-h-[120px] md:min-h-[160px] p-1 sm:p-2 md:p-3 border-r border-b border-slate-100 transition-all relative group flex flex-col ${hasMeals ? 'cursor-pointer hover:bg-emerald-50/30' : 'opacity-40 cursor-not-allowed'}`}
+                className={`aspect-square sm:min-h-[120px] md:min-h-[160px] p-1 sm:p-2 md:p-3 border-r border-b border-slate-100 transition-all relative group flex flex-col ${hasMeals ? 'cursor-pointer hover:bg-emerald-50/30' : 'bg-slate-50/5 text-slate-300'}`}
               >
                 <div className="flex justify-between items-start mb-0.5 sm:mb-1">
-                  <span className={`text-[7px] sm:text-[10px] md:text-xs font-black px-1 sm:px-1.5 md:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${isToday ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'text-slate-400'}`}>
+                  <span className={`text-[9px] sm:text-[11px] font-black px-1.5 py-0.5 rounded-lg ${isToday ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'text-slate-400'}`}>
                     {date.getDate()}
                   </span>
                   {hasMeals && (
-                    <div className="flex gap-0.5 sm:gap-1">
-                      <div className="w-1 sm:w-1.5 h-1 sm:h-1.5 rounded-full bg-amber-400"></div>
-                      <div className="w-1 sm:w-1.5 h-1 sm:h-1.5 rounded-full bg-indigo-400"></div>
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
                     </div>
                   )}
                 </div>
                 
                 {hasMeals && (
-                  <div className="hidden sm:flex flex-col flex-1 space-y-1 overflow-hidden mt-1">
-                    <div className="bg-amber-50/40 p-1 rounded-lg border border-amber-100/10 flex flex-col">
-                       <p className="text-[7px] md:text-[8px] font-bold text-slate-700 truncate leading-none">{lunch?.name}</p>
+                  <div className="hidden sm:flex flex-col flex-1 space-y-1 overflow-hidden mt-1 animate-in fade-in">
+                    <div className="bg-amber-50/60 p-1.5 rounded-lg border border-amber-100/20 flex flex-col">
+                       <p className="text-[8px] md:text-[9px] font-bold text-slate-700 truncate leading-none">{lunch?.name}</p>
                     </div>
-                    <div className="bg-indigo-50/40 p-1 rounded-lg border border-indigo-100/10 flex flex-col">
-                       <p className="text-[7px] md:text-[8px] font-bold text-slate-700 truncate leading-none">{dinner?.name}</p>
+                    <div className="bg-indigo-50/60 p-1.5 rounded-lg border border-indigo-100/20 flex flex-col">
+                       <p className="text-[8px] md:text-[9px] font-bold text-slate-700 truncate leading-none">{dinner?.name}</p>
                     </div>
                   </div>
-                )}
-                
-                {isToday && (
-                  <div className="absolute bottom-1 right-1 w-1 h-1 bg-emerald-500 rounded-full animate-pulse sm:hidden"></div>
                 )}
               </div>
             );
@@ -161,16 +163,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
       </div>
 
       <div className="flex flex-wrap gap-3 sm:gap-6 items-center px-1">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-           <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-amber-400"></div>
-           <span className="text-[7px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Midi</span>
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-           <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-indigo-400"></div>
-           <span className="text-[7px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Soir</span>
-        </div>
-        <div className="ml-auto bg-white px-3 py-1.5 rounded-lg border border-slate-100 text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest">
-           Plan 30 jours
+        <button onClick={goToToday} className="px-3 py-1.5 text-[10px] font-black text-slate-500 uppercase bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Retour à Aujourd'hui</button>
+        <div className="ml-auto flex items-center gap-4">
+           <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-amber-400"></div>
+              <span className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Midi</span>
+           </div>
+           <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-indigo-400"></div>
+              <span className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Soir</span>
+           </div>
         </div>
       </div>
 
@@ -179,7 +181,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ mealPlan }) => {
           <div className="bg-white w-full max-w-lg rounded-t-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 border border-white">
             <div className="bg-slate-900 p-6 sm:p-8 text-white relative">
               <div className="relative z-10">
-                <p className="text-emerald-400 font-black uppercase tracking-widest text-[8px] sm:text-[10px] mb-2">Jour {selectedDayInfo.day + 1}</p>
+                <p className="text-emerald-400 font-black uppercase tracking-widest text-[8px] sm:text-[10px] mb-2">Jour {selectedDayInfo.day + 1} du programme</p>
                 <h3 className="text-xl sm:text-2xl lg:text-3xl font-black capitalize tracking-tight leading-tight">
                   {selectedDayInfo.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </h3>

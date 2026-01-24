@@ -10,8 +10,8 @@ interface Message {
   concept?: {
     title: string;
     description: string;
-    exampleMeals: string[];
     startDate?: string;
+    weeklyPreview?: { day: number, lunch: string, dinner: string }[];
   };
   timestamp?: Date;
 }
@@ -202,7 +202,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
 
     setMessages(prev => [...prev, { 
       role: 'assistant', 
-      content: `Entendu ! Je génère votre programme "${concept.title}" pour commencer le ${concept.startDate || "dès que possible"}. Cela prend environ 15 secondes...`, 
+      content: `Parfait ! Je génère le plan de 30 jours basé sur cette semaine type. Cela prend environ 20 secondes...`, 
       timestamp: new Date() 
     }]);
 
@@ -211,7 +211,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       setMealPlan(plan);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: "✅ C'est prêt ! J'ai mis à jour votre Agenda, vos Recettes et votre Liste de courses. Vous pouvez consulter les autres onglets.", 
+        content: "✅ Votre programme complet est prêt ! Consultez l'onglet 'Agenda' pour voir le mois entier.", 
         timestamp: new Date() 
       }]);
     } catch (e) {
@@ -355,7 +355,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                   </div>
                 )}
 
-                <div className={`max-w-[85%] sm:max-w-[75%] space-y-2`}>
+                <div className={`max-w-[85%] sm:max-w-[85%] lg:max-w-[70%] space-y-2`}>
                    <div className={`
                      px-5 py-3.5 rounded-2xl text-[15px] leading-relaxed shadow-sm whitespace-pre-wrap
                      ${msg.role === 'user' 
@@ -372,30 +372,52 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                    
                    {msg.concept && (
                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mt-2 animate-in slide-in-from-left-4">
-                        <h4 className="font-black text-emerald-800 text-sm mb-1">{msg.concept.title}</h4>
-                        <p className="text-emerald-700 text-xs mb-3">{msg.concept.description}</p>
-                        {msg.concept.startDate && (
-                          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3">Début : {msg.concept.startDate}</p>
-                        )}
-                        <div className="space-y-1 mb-3">
-                           {msg.concept.exampleMeals.map((meal, idx) => (
-                             <div key={idx} className="flex items-center gap-2 text-xs text-emerald-600">
-                                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
-                                {meal}
-                             </div>
-                           ))}
+                        <div className="flex justify-between items-start mb-3">
+                           <div>
+                              <h4 className="font-black text-emerald-800 text-sm">{msg.concept.title}</h4>
+                              <p className="text-emerald-600 text-[10px] font-bold uppercase tracking-widest mt-1">Proposition Semainier</p>
+                           </div>
                         </div>
-                        <button 
-                          onClick={() => handleGeneratePlan(msg.concept)}
-                          disabled={isGeneratingPlan}
-                          className={`w-full py-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${
-                            isGeneratingPlan 
-                            ? 'bg-emerald-100 text-emerald-400 cursor-wait' 
-                            : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl active:scale-95'
-                          }`}
-                        >
-                           {isGeneratingPlan ? 'Génération...' : '✨ Générer ce programme'}
-                        </button>
+                        
+                        <p className="text-emerald-700 text-xs mb-4">{msg.concept.description}</p>
+                        
+                        {/* Weekly Preview Grid */}
+                        {msg.concept.weeklyPreview && (
+                           <div className="grid gap-2 mb-4">
+                              {msg.concept.weeklyPreview.map((day, idx) => (
+                                 <div key={idx} className="bg-white/60 rounded-xl p-3 border border-emerald-100/50 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                    <div className="w-16 shrink-0">
+                                       <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-100 px-2 py-1 rounded-md">Jour {day.day}</span>
+                                    </div>
+                                    <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="text-amber-500 text-[10px]">☀️</span>
+                                          <span className="text-slate-700 font-medium truncate">{day.lunch}</span>
+                                       </div>
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="text-indigo-500 text-[10px]">🌙</span>
+                                          <span className="text-slate-700 font-medium truncate">{day.dinner}</span>
+                                       </div>
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        )}
+                        
+                        <div className="flex flex-col gap-2 mt-2">
+                           <p className="text-[10px] text-emerald-600 text-center italic mb-1">Satisfait ? Cliquez pour étendre ce modèle sur 30 jours.</p>
+                           <button 
+                             onClick={() => handleGeneratePlan(msg.concept)}
+                             disabled={isGeneratingPlan}
+                             className={`w-full py-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center gap-2 ${
+                               isGeneratingPlan 
+                               ? 'bg-emerald-100 text-emerald-400 cursor-wait' 
+                               : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl active:scale-95'
+                             }`}
+                           >
+                              {isGeneratingPlan ? 'Génération...' : '✅ Valider & Générer le Mois'}
+                           </button>
+                        </div>
                      </div>
                    )}
                    

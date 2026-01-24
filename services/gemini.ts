@@ -23,16 +23,27 @@ export const updateUserTool: FunctionDeclaration = {
 
 export const proposeConceptTool: FunctionDeclaration = {
   name: "propose_meal_plan_concept",
-  description: "Propose un concept de plan de repas pour déclencher la génération complète.",
+  description: "Propose un SEMAINE TYPE (7 jours) complète pour validation. DOIT inclure la startDate confirmée par l'utilisateur.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       title: { type: Type.STRING, description: "Titre accrocheur du plan" },
       description: { type: Type.STRING, description: "Description courte de la stratégie" },
-      startDate: { type: Type.STRING, description: "Date de début (YYYY-MM-DD). Par défaut: aujourd'hui." },
-      exampleMeals: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 exemples de plats" }
+      startDate: { type: Type.STRING, description: "Date de début CONFIRMÉE par l'utilisateur (YYYY-MM-DD)." },
+      weeklyPreview: { 
+        type: Type.ARRAY, 
+        description: "Menu type pour les 7 premiers jours (Midi et Soir).",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            day: { type: Type.INTEGER, description: "Numéro du jour (1 à 7)" },
+            lunch: { type: Type.STRING, description: "Nom du plat midi" },
+            dinner: { type: Type.STRING, description: "Nom du plat soir" }
+          }
+        }
+      }
     },
-    required: ["title", "description", "exampleMeals"]
+    required: ["title", "description", "weeklyPreview", "startDate"]
   }
 };
 
@@ -98,7 +109,7 @@ export const chatWithAI = async (
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = 'gemini-2.5-flash'; // Idéal pour le multimodal rapide
+  const modelName = 'gemini-2.5-flash'; 
 
   // Construction d'un contexte "Temps Réel" pour l'IA
   const contextStr = context ? `
@@ -108,49 +119,54 @@ export const chatWithAI = async (
   - Calories brûlées (sport) : ${context.caloriesBurned} kcal.
   ` : '';
 
-  const systemInstruction = `Tu es Crystal, une IA nutritionniste de luxe connectée à une application de biologie.
+  const todayDate = new Date().toISOString().split('T')[0];
+
+  const systemInstruction = `Tu es Crystal, une IA nutritionniste de luxe.
+  DATE D'AUJOURD'HUI : ${todayDate}.
   
   CONTEXTE UTILISATEUR :
   Nom: ${user.name}.
   Poids: ${user.weightHistory?.[user.weightHistory.length-1]?.weight || '?'}kg.
   ${contextStr}
   
-  TES SUPER-POUVOIRS (OUTILS) :
-  1. ANALYSE VISUELLE : Si l'utilisateur envoie une image de nourriture, analyse-la, estime les calories et UTILISE 'log_meal'.
-  2. Si l'utilisateur dit "J'ai mangé une pomme", UTILISE 'log_meal'.
-  3. Si l'utilisateur dit "J'ai couru 10min", UTILISE 'log_workout'.
-  4. Si l'utilisateur dit "J'ai bu un verre d'eau", UTILISE 'log_hydration'.
-  5. Si l'utilisateur veut un programme, UTILISE 'propose_meal_plan_concept'.
+  PROCÉDURE DE PLANIFICATION (OBLIGATOIRE) :
+  1. Si l'utilisateur demande un plan, VÉRIFIE SI UNE DATE DE DÉBUT EST DÉFINIE OU MENTIONNÉE.
+     -> Si l'utilisateur n'a pas donné de date : DEMANDE LUI D'ABORD : "À partir de quelle date souhaitez-vous commencer ce programme ?"
+     -> NE PROPOSE RIEN TANT QUE TU N'AS PAS LA DATE.
+  
+  2. Une fois la date obtenue :
+     -> UTILISE 'propose_meal_plan_concept' avec le paramètre 'startDate' rempli.
+     -> Propose un TITRE, une STRATÉGIE et un SEMAINIER TYPE DE 7 JOURS (weeklyPreview).
+  
+  3. L'utilisateur doit valider le concept. Ensuite, l'app générera le mois complet à partir de la date choisie.
 
-  RÈGLES :
-  - Sois proactive. Si on t'envoie une photo, sois impressionnée et précise sur l'analyse nutritionnelle.
-  - Analyse les données. Si l'utilisateur a beaucoup brûlé de calories, suggère de bien manger.
-  - Réponse courte, élégante et encourageante.
+  TES AUTRES POUVOIRS :
+  1. ANALYSE VISUELLE : Si l'utilisateur envoie une image de nourriture, analyse-la, estime les calories et UTILISE 'log_meal'.
+  2. Si l'utilisateur dit "J'ai couru 10min", UTILISE 'log_workout'.
+  3. Si l'utilisateur dit "J'ai bu un verre d'eau", UTILISE 'log_hydration'.
+
+  TON TON :
+  - Sois proactive, précise et élégante.
   `;
 
   const contents: { role: string, parts: any[] }[] = chatHistory.slice(-10).map(msg => {
-    // Si le message historique avait une image (non stockée dans l'historique texte brut pour l'instant), on met un placeholder
-    // Dans une version avancée, on stockerait l'historique multimodal.
     return {
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content || " " }]
     };
   });
 
-  // Construction du message actuel (Texte ou Multimodal)
   const currentParts: any[] = [];
   
   if (typeof input === 'string') {
     currentParts.push({ text: input });
   } else {
-    // Cas Multimodal (Image)
     currentParts.push({ 
       inlineData: { 
         mimeType: input.mimeType, 
         data: input.imageBase64 
       } 
     });
-    // Texte d'accompagnement ou prompt par défaut pour l'image
     currentParts.push({ text: input.text || "Analyse cette image nutritionnellement et enregistre le repas." });
   }
   
@@ -171,7 +187,7 @@ export const chatWithAI = async (
       reply: "",
       extractedInfo: {} as any,
       suggestedConcept: undefined as any,
-      actionLog: [] as any[] // Pour stocker les actions sport/eau/repas
+      actionLog: [] as any[] 
     };
 
     if (response.text) {
@@ -200,7 +216,6 @@ export const chatWithAI = async (
       }
     }
 
-    // Fallback message si l'IA a juste exécuté une action sans parler
     if (!result.reply || result.reply.trim().length === 0) {
       if (result.actionLog.length > 0) {
          const type = result.actionLog[0].type;
@@ -210,7 +225,7 @@ export const chatWithAI = async (
       } else if (Object.keys(result.extractedInfo).length > 0) {
         result.reply = `Profil mis à jour.`;
       } else if (result.suggestedConcept) {
-        result.reply = `Je peux générer le programme "${result.suggestedConcept.title}". On y va ?`;
+        result.reply = `C'est noté pour le ${result.suggestedConcept.startDate}. J'ai préparé une structure basée sur "${result.suggestedConcept.title}". Regardez ci-dessus. On valide ?`;
       } else {
         result.reply = "Je vous écoute.";
       }
@@ -267,19 +282,30 @@ export const generateMealPlan = async (concept: any, user: User): Promise<MealPl
     }
   };
 
-  const startDate = concept.startDate || new Date().toISOString();
+  const startDate = concept.startDate || new Date().toISOString().split('T')[0];
+
+  // On formate le preview pour le prompt
+  let previewStr = "";
+  if (concept.weeklyPreview && Array.isArray(concept.weeklyPreview)) {
+    previewStr = concept.weeklyPreview.map((d: any) => `Jour ${d.day}: Midi=${d.lunch}, Soir=${d.dinner}`).join('\n');
+  }
 
   const prompt = `GÉNÈRE UN PLAN DE REPAS COMPLET DE 30 JOURS.
-  Concept: "${concept.title}" - ${concept.description}.
+  
+  CONCEPT VALIDÉ: "${concept.title}"
+  STRATÉGIE: ${concept.description}
+  DATE DÉBUT : ${startDate} (Très important, le jour 1 correspond à cette date).
+  
+  SEMAINIER TYPE VALIDÉ PAR L'UTILISATEUR (À utiliser comme base/style) :
+  ${previewStr}
+  
   Profil Utilisateur: ${user.gender || 'non spécifié'}, ${user.age || 30} ans, ${user.weightHistory?.[user.weightHistory.length-1]?.weight || 70}kg.
-  Exclusions alimentaires: ${user.exclusions?.join(', ') || 'Aucune'}.
-  Date de début du programme: ${startDate}.
+  Exclusions: ${user.exclusions?.join(', ') || 'Aucune'}.
   
   EXIGENCES STRICTES :
   1. Retourne EXCLUSIVEMENT du JSON respectant le schéma fourni.
-  2. Fournis 30 jours de planification (déjeuner et dîner).
-  3. Crée une liste de recettes détaillée avec ingrédients précis et étapes de préparation.
-  4. Les recettes doivent être variées et adaptées au concept.
+  2. Fournis 30 jours de planification. Tu peux répéter les plats du semainier mais introduis des variations pour ne pas lasser.
+  3. Crée une liste de recettes détaillée avec ingrédients précis et étapes.
   `;
 
   try {
