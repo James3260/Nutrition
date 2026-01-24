@@ -18,10 +18,12 @@ import { NotificationService } from './services/NotificationService';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  image?: string; // Ajout du support image
   concept?: {
     title: string;
     description: string;
-    exampleMeals: string[];
+    startDate?: string; // Ajout de la date de début
+    weeklyPreview?: { day: number, lunch: string, dinner: string }[]; // Ajout du semainier
   };
   timestamp?: Date;
 }
