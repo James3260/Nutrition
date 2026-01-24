@@ -1,4 +1,3 @@
-
 export interface Ingredient {
   item: string;
   amount: string;
@@ -94,6 +93,7 @@ export interface User {
   age?: number;
   gender?: 'man' | 'woman';
   baseActivityLevel?: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+  goal?: string;
   // Nouvelles préférences de notifications
   lunchTime?: string; // format "HH:mm"
   dinnerTime?: string; // format "HH:mm"
