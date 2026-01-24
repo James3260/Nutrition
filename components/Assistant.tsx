@@ -22,9 +22,10 @@ interface AssistantProps {
   onUpdateUser: (updatedUser: User) => void;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  cloudStatus: 'off' | 'syncing' | 'synced' | 'error';
 }
 
-const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, messages, setMessages }) => {
+const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, messages, setMessages, cloudStatus }) => {
   const [input, setInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -244,7 +245,20 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         <div className="p-4 border-b border-slate-100 flex justify-between items-center h-16 shrink-0">
           <div className="flex items-center gap-2">
              <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white text-lg">✨</div>
-             <span className="font-bold text-slate-700">Crystal AI</span>
+             <div>
+                <span className="font-bold text-slate-700 block leading-none">Crystal AI</span>
+                {/* Visual Indicator of Cloud Sync */}
+                <div className="flex items-center gap-1 mt-0.5">
+                   {cloudStatus === 'syncing' && <span className="block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>}
+                   {cloudStatus === 'synced' && <span className="block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
+                   {cloudStatus === 'error' && <span className="block w-1.5 h-1.5 rounded-full bg-rose-500"></span>}
+                   <span className={`text-[8px] font-bold uppercase tracking-widest ${
+                     cloudStatus === 'error' ? 'text-rose-400' : cloudStatus === 'syncing' ? 'text-blue-400' : 'text-emerald-500'
+                   }`}>
+                      {cloudStatus === 'syncing' ? 'Sauvegarde...' : cloudStatus === 'error' ? 'Hors ligne' : 'Sauvegardé'}
+                   </span>
+                </div>
+             </div>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-slate-400">✕</button>
         </div>
@@ -297,10 +311,17 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         
         {/* HEADER MOBILE */}
         <div className="lg:hidden h-14 border-b border-slate-100 flex items-center px-4 justify-between shrink-0 bg-white z-10">
-           <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-           </button>
-           <span className="font-bold text-slate-800">Crystal AI</span>
+           <div className="flex items-center gap-3">
+             <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+             </button>
+             <div>
+               <span className="font-bold text-slate-800 block leading-none">Crystal AI</span>
+               <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider">
+                 {cloudStatus === 'syncing' ? 'Sync...' : 'Sauvegardé'}
+               </span>
+             </div>
+           </div>
            <div className="w-8"></div>
         </div>
 

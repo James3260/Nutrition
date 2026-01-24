@@ -68,9 +68,14 @@ const App: React.FC = () => {
     setCloudStatus('syncing');
     try {
       const data = await CloudSyncService.pullData();
-      if (data && (force || data._last_sync > lastSyncRef.current)) {
+      
+      // Logique de fusion intelligente : On prend le cloud si force=true (nouvelle connexion) 
+      // ou si la date de modif du cloud est plus récente
+      if (data && (force || (data._last_sync && data._last_sync > lastSyncRef.current))) {
+        console.log("📥 Restauration des données depuis le Cloud Google...");
+        
         if (data.mealPlan) setMealPlan(data.mealPlan);
-        // Important: Reconstituer les dates des messages car JSON stringify les perd
+        
         if (data.chatMessages) {
           const hydratedMessages = data.chatMessages.map((m: any) => ({
              ...m,
@@ -78,20 +83,37 @@ const App: React.FC = () => {
           }));
           setChatMessages(hydratedMessages);
         }
+        
         if (data.historyLogs) setHistoryLogs(data.historyLogs);
-        if (data.userData && user) setUser(prev => ({ ...prev!, ...data.userData }));
+        
+        // Fusion des données utilisateur (ne pas écraser l'auth Google actuelle)
+        if (data.userData && user) {
+           setUser(prev => ({ 
+             ...prev!, 
+             ...data.userData, 
+             isAuthenticated: true, // Sécurité
+             googleId: prev?.googleId // On garde l'ID Google de la session active
+           }));
+        }
+        
         lastSyncRef.current = data._last_sync || Date.now();
         setCloudStatus('synced');
       } else {
+        // Cloud à jour ou vide
         setCloudStatus('synced');
       }
     } catch (e) {
+      console.error("Erreur Sync:", e);
       setCloudStatus('error');
     }
   }, [user]);
 
   const pushToCloud = useCallback(async () => {
     if (!CloudSyncService.isConfigured() || isSyncing) return;
+    
+    // Ne pas pousser si on n'a pas encore de données significatives pour éviter d'écraser le cloud avec du vide au démarrage
+    if (!user) return;
+
     setIsSyncing(true);
     setCloudStatus('syncing');
     try {
@@ -115,7 +137,6 @@ const App: React.FC = () => {
     let isMounted = true;
     
     const init = async () => {
-      // Sécurité : Si dans 3 secondes ce n'est pas chargé, on force l'affichage
       const safetyTimeout = setTimeout(() => {
         if (isMounted) {
             console.warn("Délai d'initialisation dépassé, affichage forcé.");
@@ -126,7 +147,6 @@ const App: React.FC = () => {
       try {
         CloudSyncService.init();
         
-        // 1. Chargement local (Rapide)
         const [savedUser, savedPlan, savedChat, savedIcon] = await Promise.all([
             StorageService.loadData('current_user'),
             StorageService.loadData('plan'),
@@ -140,7 +160,10 @@ const App: React.FC = () => {
         
         if (savedUser) {
           setUser(savedUser);
-          CloudSyncService.setUserId(savedUser.googleId || savedUser.id);
+          // Si l'utilisateur est déjà connecté localement, on re-bind son ID Cloud
+          if (savedUser.googleId) {
+             CloudSyncService.setUserId(savedUser.googleId);
+          }
           
           if (savedPlan) setMealPlan(savedPlan);
           
@@ -153,33 +176,29 @@ const App: React.FC = () => {
           }
         }
 
-        // 2. On affiche l'interface IMMÉDIATEMENT avec les données locales
         clearTimeout(safetyTimeout);
         setIsReady(true);
 
-        // 3. Synchronisation Cloud en ARRIÈRE-PLAN (ne bloque pas l'interface)
-        if (savedUser) {
-           syncWithCloud(true).catch(err => console.warn("Background sync error:", err));
+        // Sync silencieuse en arrière-plan si déjà connecté
+        if (savedUser && savedUser.googleId) {
+           syncWithCloud(false).catch(err => console.warn("Background sync error:", err));
         }
 
       } catch (error) {
         console.error("Erreur critique init:", error);
-        // En cas d'erreur, on affiche quand même l'app pour ne pas bloquer l'utilisateur
         if (isMounted) setIsReady(true);
       }
     };
 
     init();
     return () => { isMounted = false; };
-  }, []); // Dépendance vide pour ne s'exécuter qu'au montage
+  }, []); 
 
-  // Sauvegarde automatique
+  // Sauvegarde automatique Locale + Cloud
   useEffect(() => {
     if (isReady && user) {
       StorageService.saveData('current_user', user);
       if (mealPlan) StorageService.saveData('plan', mealPlan);
-      
-      // FIX CRITIQUE : On sauvegarde TOUJOURS l'historique, même s'il est vide []
       StorageService.saveData('chat_history', chatMessages);
       
       const timer = setTimeout(() => pushToCloud(), 3000);
@@ -188,10 +207,19 @@ const App: React.FC = () => {
   }, [mealPlan, chatMessages, historyLogs, isReady, pushToCloud, user]);
 
   const handleLogin = async (u: User) => {
-    CloudSyncService.setUserId(u.googleId || u.id);
+    // 1. Définir l'ID Google comme clé unique de base de données
+    const userId = u.googleId || u.id;
+    CloudSyncService.setUserId(userId);
+    
     setUser(u);
-    addHistoryEvent("Authentification", `Connecté (${u.name})`, "system");
-    await syncWithCloud(true);
+    addHistoryEvent("Authentification", `Connecté via Google (${u.name})`, "system");
+    
+    // 2. FORCER une récupération des données du Cloud AVANT toute autre action
+    // Cela garantit que si l'utilisateur change de téléphone, il récupère ses données
+    setIsSyncing(true);
+    await syncWithCloud(true); 
+    setIsSyncing(false);
+
     if (u.role === 'admin') refreshAppBranding();
   };
 
@@ -216,7 +244,7 @@ const App: React.FC = () => {
         onLogout={() => { CloudSyncService.disconnect(); setUser(null); }} 
         user={user} 
         cloudStatus={cloudStatus}
-        isCloudConfigured={CloudSyncService.isConfigured()}
+        isCloudConfigured={!!user.googleId}
         onCloudRestore={() => syncWithCloud(true)}
       />
       
@@ -228,7 +256,8 @@ const App: React.FC = () => {
               user={user} 
               onUpdateUser={setUser} 
               messages={chatMessages} 
-              setMessages={setChatMessages} 
+              setMessages={setChatMessages}
+              cloudStatus={cloudStatus}
             />
           )}
           {activeTab === 'daily' && <DailyDashboard user={user} mealPlan={mealPlan} onUpdateUser={setUser} historyLogs={historyLogs} />}
