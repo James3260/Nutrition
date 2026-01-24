@@ -62,12 +62,10 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
     .filter(w => w && w.date && new Date(w.date).toDateString() === todayStr)
     .reduce((sum, w) => sum + (w.caloriesBurned || 0), 0);
 
+  // NOUVEAU : Calcul basé sur les repas enregistrés (eatenMeals)
   const caloriesEaten = (user.eatenMeals || [])
     .filter(m => m && m.date && new Date(m.date).toDateString() === todayStr)
-    .reduce((sum, m) => {
-      const recipe = mealPlan?.recipes?.find(r => r.id === m.recipeId);
-      return sum + (recipe?.calories || 0);
-    }, 0);
+    .reduce((sum, m) => sum + m.calories, 0);
 
   const totalDailyCible = baseDailyNeeds + caloriesBurnedFromWorkouts;
 
@@ -147,16 +145,40 @@ const DailyDashboard: React.FC<DailyDashboardProps> = ({ user, mealPlan, onUpdat
           <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-5 sm:p-8 md:p-10 border border-slate-100 shadow-premium relative overflow-hidden">
              <div className="flex justify-between items-center mb-6 md:mb-10"><h2 className="text-lg md:text-xl font-black text-slate-900">Aujourd'hui</h2><span className="text-[9px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest">{isProfileComplete ? 'Calibré' : 'Mode Démo'}</span></div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
-               {['lunch', 'dinner'].map((type) => {
-                 const recipeId = currentDayPlan ? (currentDayPlan as any)[type] : null;
-                 const recipe = mealPlan?.recipes?.find(r => r.id === recipeId);
-                 return (
-                   <div key={type} className="p-4 sm:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all flex flex-col justify-between">
-                      <div className="flex items-center gap-3 sm:gap-4 mb-4"><div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-sm shrink-0">{type === 'lunch' ? '🍱' : '🌙'}</div><div className="min-w-0"><p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase">{type === 'lunch' ? 'Midi' : 'Soir'}</p><h4 className="text-xs sm:text-sm font-black text-slate-800 truncate">{recipe?.name || '---'}</h4></div></div>
-                      <button className="w-full py-2.5 sm:py-3 bg-white hover:bg-emerald-500 hover:text-white text-slate-900 rounded-lg md:rounded-xl font-black text-[9px] sm:text-[10px] uppercase transition-all shadow-sm border border-slate-100">Détails</button>
-                   </div>
-                 );
-               })}
+               
+               {/* Affichage intelligent : Soit le plan, soit les repas loggés s'il y en a */}
+               {currentDayPlan ? (
+                 ['lunch', 'dinner'].map((type) => {
+                   const recipeId = (currentDayPlan as any)[type];
+                   const recipe = mealPlan?.recipes?.find(r => r.id === recipeId);
+                   return (
+                     <div key={type} className="p-4 sm:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all flex flex-col justify-between">
+                        <div className="flex items-center gap-3 sm:gap-4 mb-4"><div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-sm shrink-0">{type === 'lunch' ? '🍱' : '🌙'}</div><div className="min-w-0"><p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase">Planifié</p><h4 className="text-xs sm:text-sm font-black text-slate-800 truncate">{recipe?.name || '---'}</h4></div></div>
+                     </div>
+                   );
+                 })
+               ) : (
+                 <p className="text-slate-400 text-xs text-center col-span-2 py-4">Pas de plan actif. Utilisez l'assistant pour générer un menu.</p>
+               )}
+               
+               {/* Liste des repas mangés (Logs) */}
+               {user.eatenMeals && user.eatenMeals.filter(m => new Date(m.date).toDateString() === todayStr).length > 0 && (
+                 <div className="col-span-1 sm:col-span-2 mt-4 pt-4 border-t border-slate-50">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Consommé Réellement</p>
+                    <div className="space-y-2">
+                      {user.eatenMeals.filter(m => new Date(m.date).toDateString() === todayStr).map((meal) => (
+                        <div key={meal.id} className="flex items-center justify-between p-3 rounded-xl bg-emerald-50/50">
+                           <div className="flex items-center gap-3">
+                              {meal.imageUrl && <img src={meal.imageUrl} className="w-8 h-8 rounded-lg object-cover" alt="" />}
+                              <span className="text-xs font-bold text-slate-700">{meal.name}</span>
+                           </div>
+                           <span className="text-xs font-black text-emerald-600">{meal.calories} kcal</span>
+                        </div>
+                      ))}
+                    </div>
+                 </div>
+               )}
+
              </div>
           </div>
           <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[1.5rem] md:rounded-[2.5rem] p-6 sm:p-8 md:p-10 text-white shadow-xl shadow-blue-100">

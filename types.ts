@@ -50,9 +50,13 @@ export interface HydrationRecord {
 }
 
 export interface EatenMealRecord {
+  id: string;
   date: string;
-  mealType: 'lunch' | 'dinner';
-  recipeId: string;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  name: string;      // Nom du plat (ex: "Salade César")
+  calories: number;  // Calories réelles ou estimées par IA
+  recipeId?: string; // Optionnel : lien vers une recette du plan
+  imageUrl?: string; // Optionnel : photo du repas
 }
 
 export interface HistoryEvent {

@@ -63,13 +63,27 @@ export const logHydrationTool: FunctionDeclaration = {
   }
 };
 
+export const logMealTool: FunctionDeclaration = {
+  name: "log_meal",
+  description: "Enregistre un repas consommé (via texte ou analyse photo) dans le Dashboard.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      name: { type: Type.STRING, description: "Nom du plat identifié" },
+      calories: { type: Type.NUMBER, description: "Estimation calorique totale" },
+      mealType: { type: Type.STRING, enum: ["breakfast", "lunch", "dinner", "snack"], description: "Type de repas" }
+    },
+    required: ["name", "calories", "mealType"]
+  }
+};
+
 export const tools: Tool[] = [
-  { functionDeclarations: [updateUserTool, proposeConceptTool, logWorkoutTool, logHydrationTool] }
+  { functionDeclarations: [updateUserTool, proposeConceptTool, logWorkoutTool, logHydrationTool, logMealTool] }
 ];
 
 // --- CHAT PRINCIPAL ---
 export const chatWithAI = async (
-  input: string | { audioData: string, mimeType: string }, 
+  input: string | { imageBase64: string, mimeType: string, text?: string }, 
   user: User, 
   chatHistory: any[],
   context?: {
@@ -84,13 +98,13 @@ export const chatWithAI = async (
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = 'gemini-2.5-flash';
+  const modelName = 'gemini-2.5-flash'; // Idéal pour le multimodal rapide
 
   // Construction d'un contexte "Temps Réel" pour l'IA
   const contextStr = context ? `
   ÉTAT DU JOUR (Temps Réel) :
   - Hydratation : ${context.hydrationCurrent}ml / ${context.hydrationGoal}ml.
-  - Calories mangées (estimé) : ${context.caloriesEaten} kcal.
+  - Calories mangées (confirmées) : ${context.caloriesEaten} kcal.
   - Calories brûlées (sport) : ${context.caloriesBurned} kcal.
   ` : '';
 
@@ -102,34 +116,45 @@ export const chatWithAI = async (
   ${contextStr}
   
   TES SUPER-POUVOIRS (OUTILS) :
-  1. Si l'utilisateur dit "J'ai couru 10min", UTILISE 'log_workout'. Ne fais pas juste répondre.
-  2. Si l'utilisateur dit "J'ai bu un verre d'eau", UTILISE 'log_hydration'.
-  3. Si l'utilisateur veut un programme, UTILISE 'propose_meal_plan_concept'.
-  4. Si l'utilisateur donne une info physique, UTILISE 'update_user_profile'.
+  1. ANALYSE VISUELLE : Si l'utilisateur envoie une image de nourriture, analyse-la, estime les calories et UTILISE 'log_meal'.
+  2. Si l'utilisateur dit "J'ai mangé une pomme", UTILISE 'log_meal'.
+  3. Si l'utilisateur dit "J'ai couru 10min", UTILISE 'log_workout'.
+  4. Si l'utilisateur dit "J'ai bu un verre d'eau", UTILISE 'log_hydration'.
+  5. Si l'utilisateur veut un programme, UTILISE 'propose_meal_plan_concept'.
 
   RÈGLES :
-  - Sois proactive. Si l'hydratation est basse dans le contexte, rappelle-lui de boire.
+  - Sois proactive. Si on t'envoie une photo, sois impressionnée et précise sur l'analyse nutritionnelle.
   - Analyse les données. Si l'utilisateur a beaucoup brûlé de calories, suggère de bien manger.
   - Réponse courte, élégante et encourageante.
   `;
 
-  const contents: { role: string, parts: any[] }[] = chatHistory.slice(-10).map(msg => ({
-    role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content || " " }]
-  }));
-
-  let currentPart;
-  if (typeof input === 'string') {
-    currentPart = { text: input };
-  } else {
-    currentPart = {
-      inlineData: {
-        mimeType: input.mimeType,
-        data: input.audioData
-      }
+  const contents: { role: string, parts: any[] }[] = chatHistory.slice(-10).map(msg => {
+    // Si le message historique avait une image (non stockée dans l'historique texte brut pour l'instant), on met un placeholder
+    // Dans une version avancée, on stockerait l'historique multimodal.
+    return {
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content || " " }]
     };
+  });
+
+  // Construction du message actuel (Texte ou Multimodal)
+  const currentParts: any[] = [];
+  
+  if (typeof input === 'string') {
+    currentParts.push({ text: input });
+  } else {
+    // Cas Multimodal (Image)
+    currentParts.push({ 
+      inlineData: { 
+        mimeType: input.mimeType, 
+        data: input.imageBase64 
+      } 
+    });
+    // Texte d'accompagnement ou prompt par défaut pour l'image
+    currentParts.push({ text: input.text || "Analyse cette image nutritionnellement et enregistre le repas." });
   }
-  contents.push({ role: 'user', parts: [currentPart] });
+  
+  contents.push({ role: 'user', parts: currentParts });
 
   try {
     const response = await ai.models.generateContent({
@@ -146,7 +171,7 @@ export const chatWithAI = async (
       reply: "",
       extractedInfo: {} as any,
       suggestedConcept: undefined as any,
-      actionLog: [] as any[] // Pour stocker les actions sport/eau
+      actionLog: [] as any[] // Pour stocker les actions sport/eau/repas
     };
 
     if (response.text) {
@@ -169,6 +194,9 @@ export const chatWithAI = async (
         if (call.name === 'log_hydration') {
           result.actionLog.push({ type: 'hydration', data: call.args });
         }
+        if (call.name === 'log_meal') {
+          result.actionLog.push({ type: 'meal', data: call.args });
+        }
       }
     }
 
@@ -178,6 +206,7 @@ export const chatWithAI = async (
          const type = result.actionLog[0].type;
          if (type === 'workout') result.reply = "Séance enregistrée ! 💪 Excellente activité.";
          if (type === 'hydration') result.reply = "Hydratation ajoutée. 💧";
+         if (type === 'meal') result.reply = `Repas enregistré : ${result.actionLog[0].data.name} (${result.actionLog[0].data.calories} kcal). 🍽️`;
       } else if (Object.keys(result.extractedInfo).length > 0) {
         result.reply = `Profil mis à jour.`;
       } else if (result.suggestedConcept) {

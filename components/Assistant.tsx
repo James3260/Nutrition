@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { chatWithAI, generateMealPlan } from '../services/gemini';
-import { MealPlan, User, WorkoutSession, HydrationRecord } from '../types';
+import { MealPlan, User, WorkoutSession, HydrationRecord, EatenMealRecord } from '../types';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  image?: string; // Base64 de l'image envoyée
   concept?: {
     title: string;
     description: string;
@@ -25,10 +26,13 @@ interface AssistantProps {
 
 const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, messages, setMessages }) => {
   const [input, setInput] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calcul du contexte "Live" pour l'IA
   const dailyContext = useMemo(() => {
@@ -42,10 +46,9 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       .filter(r => new Date(r.date).toDateString() === todayStr)
       .reduce((sum, r) => sum + (r.amount || 0), 0);
 
-    // Estimation basique des calories mangées (mockup sans mealPlan précis ici)
     const caloriesEaten = (user.eatenMeals || [])
        .filter(m => new Date(m.date).toDateString() === todayStr)
-       .length * 600; // Moyenne arbitraire si pas de data précise
+       .reduce((sum, m) => sum + m.calories, 0);
 
     return {
       caloriesEaten,
@@ -55,25 +58,57 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     };
   }, [user]);
 
-  // Scroll automatique intelligent
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, isLoading, isGeneratingPlan]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || isGeneratingPlan) return;
+    if ((!input.trim() && !selectedImage) || isLoading || isGeneratingPlan) return;
 
-    const userMsg = input;
+    const userMsgText = input;
+    const userImage = selectedImage;
+    
     setInput('');
+    setSelectedImage(null);
     setIsLoading(true);
 
-    const newUserMsg: Message = { role: 'user', content: userMsg, timestamp: new Date() };
+    const newUserMsg: Message = { 
+      role: 'user', 
+      content: userMsgText, 
+      image: userImage || undefined,
+      timestamp: new Date() 
+    };
     setMessages(prev => [...prev, newUserMsg]);
 
     try {
+      let aiInput: any = userMsgText;
+      
+      // Préparation de l'input pour Gemini (Multimodal ou Texte)
+      if (userImage) {
+        // userImage est "data:image/jpeg;base64,....." -> on extrait
+        const base64Data = userImage.split(',')[1];
+        const mimeType = userImage.split(';')[0].split(':')[1];
+        aiInput = {
+          imageBase64: base64Data,
+          mimeType: mimeType,
+          text: userMsgText // Peut être vide
+        };
+      }
+
       // On passe le contexte journalier à l'IA
-      const response = await chatWithAI(userMsg, user, messages, dailyContext);
+      const response = await chatWithAI(aiInput, user, messages, dailyContext);
 
       let updatedUser = { ...user };
       let hasUpdates = false;
@@ -90,9 +125,10 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         hasUpdates = true;
       }
 
-      // 2. Traitement des actions spéciales (Sport / Hydratation)
+      // 2. Traitement des actions spéciales (Sport / Hydratation / Repas)
       if (response.actionLog && response.actionLog.length > 0) {
         for (const action of response.actionLog) {
+          
           if (action.type === 'workout') {
             const data = action.data;
             const factorMap: Record<string, number> = { 
@@ -107,7 +143,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
             const newWorkout: WorkoutSession = {
               id: Math.random().toString(36).substr(2, 9),
               date: new Date().toISOString(),
-              type: data.type, // L'IA doit renvoyer le type ENUM correct
+              type: data.type,
               duration: data.duration,
               intensity: data.intensity || 'medium',
               caloriesBurned: calories
@@ -122,6 +158,19 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                amount: action.data.amount
              };
              updatedUser.hydrationRecords = [...(updatedUser.hydrationRecords || []), newRecord];
+             hasUpdates = true;
+          }
+
+          if (action.type === 'meal') {
+             const newMeal: EatenMealRecord = {
+               id: Math.random().toString(36).substr(2, 9),
+               date: new Date().toISOString(),
+               name: action.data.name,
+               calories: action.data.calories,
+               mealType: action.data.mealType || 'snack',
+               imageUrl: userImage || undefined // On attache l'image si elle existe
+             };
+             updatedUser.eatenMeals = [...(updatedUser.eatenMeals || []), newMeal];
              hasUpdates = true;
           }
         }
@@ -150,7 +199,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     if (isGeneratingPlan) return;
     setIsGeneratingPlan(true);
 
-    // Feedback visuel immédiat dans le chat
     setMessages(prev => [...prev, { 
       role: 'assistant', 
       content: `Entendu ! Je génère votre programme "${concept.title}" pour commencer le ${concept.startDate || "dès que possible"}. Cela prend environ 15 secondes...`, 
@@ -158,12 +206,8 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     }]);
 
     try {
-      // APPEL AU SERVICE GEMINI QUI RETOURNE LE JSON COMPLET
       const plan = await generateMealPlan(concept, user);
-      
-      // MISE À JOUR DE L'ETAT GLOBAL DE L'APPLICATION
       setMealPlan(plan);
-      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: "✅ C'est prêt ! J'ai mis à jour votre Agenda, vos Recettes et votre Liste de courses. Vous pouvez consulter les autres onglets.", 
@@ -188,7 +232,6 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
     }
   };
 
-  // --- RENDER ---
   return (
     <div className="flex h-full w-full bg-white relative font-sans overflow-hidden">
       
@@ -214,6 +257,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                 <p className="text-xs font-medium text-slate-700">⚖️ {user.weightHistory?.slice(-1)[0]?.weight || '--'} kg</p>
                 <div className="h-px bg-slate-100 my-2"></div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase">Aujourd'hui</p>
+                <p className="text-xs font-medium text-emerald-600">🍽️ {dailyContext.caloriesEaten} kcal</p>
                 <p className="text-xs font-medium text-blue-600">💧 {dailyContext.hydrationCurrent}/{dailyContext.hydrationGoal}ml</p>
                 <p className="text-xs font-medium text-orange-600">🔥 {dailyContext.caloriesBurned} kcal brûlées</p>
              </div>
@@ -234,7 +278,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
               </div>
               <div className="min-w-0">
                  <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
-                 <p className="text-[10px] text-slate-500 truncate">Mode Connecté</p>
+                 <p className="text-[10px] text-slate-500 truncate">Vision IA Active</p>
               </div>
            </div>
         </div>
@@ -251,7 +295,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
       {/* MAIN CHAT AREA */}
       <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
         
-        {/* HEADER MOBILE (visible uniquement sur mobile) */}
+        {/* HEADER MOBILE */}
         <div className="lg:hidden h-14 border-b border-slate-100 flex items-center px-4 justify-between shrink-0 bg-white z-10">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -264,18 +308,18 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6 custom-scrollbar scroll-smooth">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in duration-700">
-               <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">🤖</div>
-               <h2 className="text-2xl font-black text-slate-800 mb-2">Comment puis-je vous aider ?</h2>
-               <p className="text-slate-400 max-w-xs mx-auto mb-8">Je suis connectée à votre Activité et votre Hydratation.</p>
+               <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">📷</div>
+               <h2 className="text-2xl font-black text-slate-800 mb-2">Vision & Nutrition</h2>
+               <p className="text-slate-400 max-w-xs mx-auto mb-8">Envoyez-moi une photo de votre plat, je calcule les calories pour vous.</p>
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md w-full">
+                  <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
+                     <span className="text-lg block mb-1">📸</span>
+                     <span className="text-xs font-bold text-slate-700">Scanner un repas</span>
+                  </button>
                   <button onClick={() => setInput("J'ai couru 30 minutes")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
                      <span className="text-lg block mb-1">🏃‍♂️</span>
                      <span className="text-xs font-bold text-slate-700">Enregistrer un sport</span>
-                  </button>
-                  <button onClick={() => setInput("J'ai bu 500ml d'eau")} className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left hover:bg-slate-100 transition-colors">
-                     <span className="text-lg block mb-1">💧</span>
-                     <span className="text-xs font-bold text-slate-700">Ajouter de l'eau</span>
                   </button>
                </div>
             </div>
@@ -295,6 +339,11 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                        ? 'bg-slate-800 text-white rounded-tr-none' 
                        : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'}
                    `}>
+                     {msg.image && (
+                        <div className="mb-3 rounded-lg overflow-hidden max-w-[200px] border border-white/20">
+                          <img src={msg.image} alt="User upload" className="w-full h-auto object-cover" />
+                        </div>
+                     )}
                      {msg.content}
                    </div>
                    
@@ -322,14 +371,7 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
                             : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg hover:shadow-xl active:scale-95'
                           }`}
                         >
-                           {isGeneratingPlan ? (
-                             <>
-                               <span className="w-3 h-3 border-2 border-emerald-400 border-t-emerald-600 rounded-full animate-spin"></span>
-                               Génération en cours...
-                             </>
-                           ) : (
-                             <>✨ Générer ce programme</>
-                           )}
+                           {isGeneratingPlan ? 'Génération...' : '✨ Générer ce programme'}
                         </button>
                      </div>
                    )}
@@ -364,20 +406,51 @@ const Assistant: React.FC<AssistantProps> = ({ setMealPlan, user, onUpdateUser, 
         {/* INPUT AREA */}
         <div className="p-4 border-t border-slate-100 bg-white shrink-0 z-20">
           <div className="max-w-3xl mx-auto relative">
+             {/* Image Preview */}
+             {selectedImage && (
+               <div className="absolute bottom-full left-0 mb-4 ml-2 animate-in slide-in-from-bottom-2 fade-in">
+                 <div className="relative group">
+                   <img src={selectedImage} alt="Preview" className="h-20 w-20 object-cover rounded-xl shadow-lg border-2 border-white" />
+                   <button 
+                     onClick={() => setSelectedImage(null)}
+                     className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 shadow-md hover:bg-rose-600 transition-colors"
+                   >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                   </button>
+                 </div>
+               </div>
+             )}
+
              <form onSubmit={handleTextSubmit} className="relative flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-3xl p-2 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  onChange={handleImageSelect}
+                />
+                
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3 text-slate-400 hover:text-emerald-600 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                </button>
+
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ex: J'ai couru 1h ou J'ai bu de l'eau..."
-                  className="w-full bg-transparent border-none outline-none text-sm text-slate-800 placeholder:text-slate-400 px-4 py-3 max-h-32"
+                  placeholder={selectedImage ? "Ajouter une description..." : "Posez une question ou envoyez une photo..."}
+                  className="w-full bg-transparent border-none outline-none text-sm text-slate-800 placeholder:text-slate-400 px-2 py-3 max-h-32"
                   autoComplete="off"
                 />
                 <button 
                   type="submit" 
-                  disabled={!input.trim() || isLoading || isGeneratingPlan}
+                  disabled={(!input.trim() && !selectedImage) || isLoading || isGeneratingPlan}
                   className={`
                     p-3 rounded-2xl flex items-center justify-center transition-all duration-200
-                    ${input.trim() && !isLoading && !isGeneratingPlan
+                    ${(input.trim() || selectedImage) && !isLoading && !isGeneratingPlan
                       ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-500 transform hover:scale-105' 
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
                   `}
